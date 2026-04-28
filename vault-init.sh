@@ -68,6 +68,7 @@ Prefer \`wiki/topics/\` hits — they're pre-synthesized. Read \`index.md\` only
 ## Session start
 - **Queries**: read this → \`search_notes\` directly → respond.
 - **Ingest / lint**: read this → read \`index.md\` → skim tail of \`log.md\` → proceed.
+- **Always** scope \`search_notes\` to \`folder: "wiki"\` or \`folder: "raw"\` — unscoped searches hit \`site/node_modules\` noise.
 
 ## You do NOT
 - Modify \`raw/\` (immutable).
