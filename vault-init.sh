@@ -204,6 +204,19 @@ gh api "repos/$GITHUB_USER/$VAULT_NAME/pages" \
 # Push — triggers deploy
 git push -u origin main
 
+# Protect main branch — force contributions through PRs
+echo "Protecting main branch..."
+gh api "repos/$GITHUB_USER/$VAULT_NAME/branches/main/protection" \
+  --method PUT \
+  --input - << 'JSON'
+{
+  "required_status_checks": null,
+  "enforce_admins": false,
+  "required_pull_request_reviews": {"required_approving_review_count": 1, "dismiss_stale_reviews": false},
+  "restrictions": null
+}
+JSON
+
 # Register as a user-level MCP server (Claude Code users only)
 if command -v claude >/dev/null 2>&1; then
   echo "Registering MCP server: $VAULT_NAME"
