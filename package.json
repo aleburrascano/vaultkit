@@ -1,6 +1,7 @@
 {
   "name": "@aleburrascano/vault-init",
-  "version": "1.2.0",
+  "version": "1.2.1",
+  "type": "module",
   "description": "Initialize Obsidian wikis with GitHub Pages, Quartz, and Claude Code MCP — fully automated.",
   "bin": {
     "vault-init": "./bin/vault-init.js"

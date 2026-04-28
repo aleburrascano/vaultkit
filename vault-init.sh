@@ -21,7 +21,9 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-VAULT_DIR="$(pwd)/$VAULT_NAME"
+# VAULT_INIT_CWD is injected by the Node.js wrapper as the user's real working
+# directory (bash's own pwd returns the npm package dir, not where the user ran the command).
+VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
 
 echo "[1/8] Checking prerequisites..."
 for cmd in git node npm gh; do

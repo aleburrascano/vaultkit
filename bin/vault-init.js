@@ -1,11 +1,16 @@
 #!/usr/bin/env node
-'use strict';
-const { spawnSync } = require('child_process');
-const { existsSync } = require('fs');
-const path = require('path');
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
 
-const cwd = path.resolve(__dirname, '..');
+// cwd for spawnSync must be the package dir so bash can find vault-init.sh.
+// We pass the user's real working directory via VAULT_INIT_CWD instead.
+const cwd = resolve(import.meta.dirname, '..');
 const env = { ...process.env };
+
+// Always tell the script where the user actually ran the command from.
+env.VAULT_INIT_CWD = process.cwd();
+
 let bash = 'bash';
 
 if (process.platform === 'win32') {
@@ -14,18 +19,21 @@ if (process.platform === 'win32') {
     .replace(/^([A-Za-z]):\//, (_, d) => `/${d.toLowerCase()}/`)
     .replace(/\/$/, '');
 
+  // User's CWD needs to be in POSIX format for bash.
+  env.VAULT_INIT_CWD = toUnix(process.cwd());
+
   // ── Find Git for Windows bash ──────────────────────────────────────────────
   // C:\Windows\System32\bash.exe is the WSL launcher — it boots a Linux
   // environment where Windows tools (node, git, npm, gh) are invisible.
   const gitRoots = [
-    process.env.PROGRAMFILES         && path.join(process.env.PROGRAMFILES,         'Git'),
-    process.env['PROGRAMFILES(X86)'] && path.join(process.env['PROGRAMFILES(X86)'], 'Git'),
-    process.env.LOCALAPPDATA         && path.join(process.env.LOCALAPPDATA,         'Programs', 'Git'),
+    process.env.PROGRAMFILES         && join(process.env.PROGRAMFILES,         'Git'),
+    process.env['PROGRAMFILES(X86)'] && join(process.env['PROGRAMFILES(X86)'], 'Git'),
+    process.env.LOCALAPPDATA         && join(process.env.LOCALAPPDATA,         'Programs', 'Git'),
   ].filter(Boolean);
 
   let bashPath = null;
   for (const root of gitRoots) {
-    const candidate = path.join(root, 'bin', 'bash.exe');
+    const candidate = join(root, 'bin', 'bash.exe');
     if (existsSync(candidate)) { bashPath = candidate; break; }
   }
 
@@ -47,27 +55,26 @@ if (process.platform === 'win32') {
   }
   bash = bashPath;
 
-  // ── Find each required tool via where.exe ─────────────────────────────────
-  // where.exe is Windows-native: it handles all PATH edge cases correctly
-  // and finds .exe/.cmd/.bat regardless of extension. Far more reliable than
-  // trying to convert the Windows PATH string ourselves.
+  // ── Discover required tools via where.exe ─────────────────────────────────
+  // where.exe is Windows-native: handles all PATH edge cases and extensions
+  // (.exe/.cmd/.bat). Far more reliable than converting the PATH string ourselves.
   const REQUIRED = [
-    { name: 'git', url: 'https://git-scm.com' },
+    { name: 'git',  url: 'https://git-scm.com' },
     { name: 'node', url: 'https://nodejs.org' },
     { name: 'npm',  url: 'https://nodejs.org' },
     { name: 'gh',   url: 'https://cli.github.com' },
   ];
 
   const toolDirs = new Set([
-    path.dirname(bash),
-    path.dirname(process.execPath), // node is always findable
+    dirname(bash),
+    dirname(process.execPath), // node is always findable
   ]);
   const missing = [];
 
   for (const { name, url } of REQUIRED) {
     const r = spawnSync('where', [name], { encoding: 'utf8' });
     if (r.status === 0 && r.stdout.trim()) {
-      toolDirs.add(path.dirname(r.stdout.trim().split('\n')[0].trim()));
+      toolDirs.add(dirname(r.stdout.trim().split('\n')[0].trim()));
     } else {
       missing.push(`  ${name.padEnd(6)} → ${url}`);
     }
@@ -78,9 +85,15 @@ if (process.platform === 'win32') {
     process.exit(1);
   }
 
+  // ── Optional: find claude so the MCP step works ────────────────────────────
+  const claudeWhere = spawnSync('where', ['claude'], { encoding: 'utf8' });
+  if (claudeWhere.status === 0 && claudeWhere.stdout.trim()) {
+    toolDirs.add(dirname(claudeWhere.stdout.trim().split('\n')[0].trim()));
+  }
+
   // Tool dirs go first so they shadow anything broken in the existing PATH.
-  // We still append the full converted PATH so bash built-ins and Git's own
-  // bundled utilities (ssh, curl, etc.) remain reachable.
+  // Append the full converted PATH so bash built-ins and Git's bundled
+  // utilities (ssh, curl, etc.) remain reachable.
   const existing = (env.PATH || '').split(';').filter(Boolean).map(toUnix);
   env.PATH = [...new Set([...[...toolDirs].map(toUnix), ...existing])].join(':');
 }
