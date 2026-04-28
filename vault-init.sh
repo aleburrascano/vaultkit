@@ -40,7 +40,7 @@ mkdir -p .github/workflows
 cat > CLAUDE.md << EOF
 # CLAUDE.md — ${VAULT_NAME}
 
-You maintain this personal knowledge wiki. Read this + \`index.md\` + tail of \`log.md\` at session start.
+You maintain this personal knowledge wiki. Read this at session start, then search-first — see Session start below.
 
 ## Layers
 1. \`raw/\` — immutable source material. Read; never modify.
@@ -62,7 +62,12 @@ You maintain this personal knowledge wiki. Read this + \`index.md\` + tail of \`
 5. Update \`index.md\`. Append \`log.md\` entry.
 
 ### Query
-Read \`index.md\` → drill into candidates → synthesize with citations.
+Use \`search_notes\` first → \`get_note\` on top 1–3 hits → synthesize with citations.
+Prefer \`wiki/topics/\` hits — they're pre-synthesized. Read \`index.md\` only for ingest/lint.
+
+## Session start
+- **Queries**: read this → \`search_notes\` directly → respond.
+- **Ingest / lint**: read this → read \`index.md\` → skim tail of \`log.md\` → proceed.
 
 ## You do NOT
 - Modify \`raw/\` (immutable).
