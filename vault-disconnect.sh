@@ -11,25 +11,49 @@ fi
 
 VAULT_NAME="$1"
 
+if [[ "$VAULT_NAME" =~ / ]]; then
+  echo "Error: provide the vault name only (e.g. 'SystemDesign'), not owner/repo."
+  exit 1
+fi
+
 if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   echo "Error: vault name must contain only letters, numbers, hyphens, and underscores."
   exit 1
 fi
 
-VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+# Resolve claude.json with a Windows-compatible path for node
+if command -v cygpath >/dev/null 2>&1; then
+  CLAUDE_JSON=$(cygpath -m "$HOME/.claude.json")
+else
+  CLAUDE_JSON="$HOME/.claude.json"
+fi
 
-if [ -d "$VAULT_DIR" ]; then
-  if ! [ -d "$VAULT_DIR/.obsidian" ] && \
-     ! { [ -f "$VAULT_DIR/CLAUDE.md" ] && [ -d "$VAULT_DIR/raw" ] && [ -d "$VAULT_DIR/wiki" ]; }; then
-    echo "Error: $VAULT_DIR does not look like a vaultkit vault — aborting."
-    exit 1
-  fi
+# Look up vault path from MCP registry; fall back to CWD/<name>
+VAULT_DIR=$(node -e "
+const fs = require('fs');
+const path = require('path');
+const file = process.argv[1];
+const name = process.argv[2];
+if (!fs.existsSync(file)) process.exit(1);
+const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+const s = (config.mcpServers || {})[name];
+if (!s || !s.args) process.exit(1);
+const scriptArg = s.args.find(a => String(a).endsWith('.mcp-start.js'));
+if (!scriptArg) process.exit(1);
+console.log(path.dirname(scriptArg));
+" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+
+# Convert Windows path back to POSIX for bash file operations
+if command -v cygpath >/dev/null 2>&1 && [[ "$VAULT_DIR" =~ ^[A-Za-z]: ]]; then
+  VAULT_DIR_POSIX=$(cygpath -u "$VAULT_DIR")
+else
+  VAULT_DIR_POSIX="$VAULT_DIR"
 fi
 
 echo ""
 echo "This will remove:"
-[ -d "$VAULT_DIR" ]  && echo "  Local: $VAULT_DIR" \
-                     || echo "  Local: $VAULT_DIR (not found — will skip)"
+[ -d "$VAULT_DIR_POSIX" ] && echo "  Local: $VAULT_DIR" \
+                          || echo "  Local: $VAULT_DIR (not found — will skip)"
 echo "  MCP:   $VAULT_NAME server registration"
 echo ""
 echo "The GitHub repo will NOT be deleted."
@@ -52,14 +76,13 @@ else
 fi
 
 # Delete local directory
-if [ -d "$VAULT_DIR" ]; then
+if [ -d "$VAULT_DIR_POSIX" ]; then
   echo "Deleting local vault..."
-  rm -rf "$VAULT_DIR"
+  rm -rf "$VAULT_DIR_POSIX"
 else
   echo "Local directory not found — skipping."
 fi
 
 echo ""
 echo "Done. $VAULT_NAME disconnected."
-echo "The GitHub repo is still available — reconnect anytime with:"
-echo "  vaultkit connect <owner/$VAULT_NAME>"
+echo "Reconnect anytime with: vaultkit connect <owner/$VAULT_NAME>"
