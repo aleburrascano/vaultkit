@@ -15,12 +15,13 @@ if (process.platform === 'win32') {
     .replace(/^([A-Za-z]):\//, (_, d) => `/${d.toLowerCase()}/`)
     .replace(/\/$/, '');
 
-  // Find bash — Git for Windows often doesn't add bash.exe to PATH.
+  // Find Git for Windows bash.
+  // C:\Windows\System32\bash.exe is the WSL launcher — it boots a Linux environment
+  // where node/git/npm/gh are invisible, so we must skip it.
   const gitRoots = [
-    process.env.PROGRAMFILES        && path.join(process.env.PROGRAMFILES,        'Git'),
+    process.env.PROGRAMFILES         && path.join(process.env.PROGRAMFILES,         'Git'),
     process.env['PROGRAMFILES(X86)'] && path.join(process.env['PROGRAMFILES(X86)'], 'Git'),
     process.env.LOCALAPPDATA         && path.join(process.env.LOCALAPPDATA,         'Programs', 'Git'),
-    process.env.USERPROFILE          && path.join(process.env.USERPROFILE,          'AppData', 'Local', 'Programs', 'Git'),
   ].filter(Boolean);
 
   let bashPath = null;
@@ -29,22 +30,28 @@ if (process.platform === 'win32') {
     if (existsSync(candidate)) { bashPath = candidate; break; }
   }
 
-  // Also accept bash if it's already on PATH.
-  const onPath = spawnSync('where', ['bash'], { encoding: 'utf8' });
-  if (onPath.status === 0 && onPath.stdout.trim()) {
-    bash = onPath.stdout.trim().split('\n')[0].trim();
-  } else if (bashPath) {
+  if (bashPath) {
     bash = bashPath;
   } else {
-    process.stderr.write(
-      'vault-init: bash not found.\n' +
-      'Install Git for Windows (https://git-scm.com) and re-run.\n'
-    );
-    process.exit(1);
+    // Fall back to PATH, but never pick the WSL shim in System32.
+    const where = spawnSync('where', ['bash'], { encoding: 'utf8' });
+    const found = (where.stdout || '').trim().split('\n')
+      .map(s => s.trim())
+      .filter(s => s && !s.toLowerCase().includes('system32'));
+    if (found.length > 0) {
+      bash = found[0];
+    } else {
+      process.stderr.write(
+        'vault-init: Git for Windows bash not found.\n' +
+        'Install Git for Windows from https://git-scm.com and re-run.\n' +
+        '(C:\\Windows\\System32\\bash.exe is WSL — it cannot see Windows tools.)\n'
+      );
+      process.exit(1);
+    }
   }
 
-  // Build a POSIX PATH that bash can use: convert semicolon/backslash Windows PATH,
-  // and prepend node's dir + bash's own dir so all tools are findable.
+  // Build a POSIX PATH that Git Bash can use.
+  // Prepend bash's own bin dir and node's dir so all tools are guaranteed findable.
   const entries = (env.PATH || '').split(';').filter(Boolean).map(toUnix);
   entries.unshift(toUnix(path.dirname(process.execPath)));
   entries.unshift(toUnix(path.dirname(bash)));
