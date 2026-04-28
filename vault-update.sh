@@ -35,7 +35,7 @@ console.log(path.dirname(scriptArg));
 
 # Fall back to CWD/<name> with identity check
 if [ -z "$VAULT_DIR" ]; then
-  VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+  VAULT_DIR="${VAULTKIT_HOME:-$HOME/vaults}/$VAULT_NAME"
   if ! [ -d "$VAULT_DIR" ]; then
     echo "Error: '$VAULT_NAME' not found in MCP registry or at $VAULT_DIR"
     echo "Run 'vaultkit list' to see registered vaults."

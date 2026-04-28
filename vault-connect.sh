@@ -26,7 +26,9 @@ else
 fi
 
 VAULT_NAME=$(basename "$REPO")
-VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+VAULTS_ROOT="${VAULTKIT_HOME:-$HOME/vaults}"
+VAULT_DIR="$VAULTS_ROOT/$VAULT_NAME"
+mkdir -p "$VAULTS_ROOT"
 
 [ -d "$VAULT_DIR" ] && { echo "Error: $VAULT_DIR already exists."; exit 1; }
 

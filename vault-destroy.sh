@@ -16,7 +16,7 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+VAULT_DIR="${VAULTKIT_HOME:-$HOME/vaults}/$VAULT_NAME"
 
 # Refuse to destroy anything that doesn't look like an Obsidian vault.
 # Accepts vaults opened in Obsidian (.obsidian/) and vault-init created ones
