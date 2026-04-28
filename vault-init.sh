@@ -293,7 +293,7 @@ git remote add origin "https://github.com/$GITHUB_USER/$VAULT_NAME.git"
 echo "[7/8] Enabling Pages and pushing..."
 gh api "repos/$GITHUB_USER/$VAULT_NAME/pages" \
   --method POST -f build_type=workflow \
-  2>/dev/null || true
+  >/dev/null 2>&1 || true
 
 # Push — triggers deploy
 git push -u origin main
@@ -302,7 +302,7 @@ git push -u origin main
 echo "[8/8] Protecting main branch..."
 gh api "repos/$GITHUB_USER/$VAULT_NAME/branches/main/protection" \
   --method PUT \
-  --input - << 'JSON'
+  --input - >/dev/null << 'JSON'
 {
   "required_status_checks": null,
   "enforce_admins": false,

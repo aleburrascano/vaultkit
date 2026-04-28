@@ -17,6 +17,18 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
 fi
 
 VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+
+# Refuse to destroy anything that doesn't look like an Obsidian vault.
+# Accepts vaults opened in Obsidian (.obsidian/) and vault-init created ones
+# that haven't been opened yet (CLAUDE.md + raw/ + wiki/).
+if [ -d "$VAULT_DIR" ]; then
+  if ! [ -d "$VAULT_DIR/.obsidian" ] && \
+     ! { [ -f "$VAULT_DIR/CLAUDE.md" ] && [ -d "$VAULT_DIR/raw" ] && [ -d "$VAULT_DIR/wiki" ]; }; then
+    echo "Error: $VAULT_DIR does not look like an Obsidian vault — aborting."
+    exit 1
+  fi
+fi
+
 GITHUB_USER=$(gh api user --jq '.login' 2>/dev/null || true)
 
 if [ -n "$GITHUB_USER" ]; then
