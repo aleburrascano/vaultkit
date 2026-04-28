@@ -229,7 +229,14 @@ JSON
 # Register as a user-level MCP server (Claude Code users only)
 if command -v claude >/dev/null 2>&1; then
   echo "Registering MCP server: $VAULT_NAME"
-  claude mcp add "$VAULT_NAME" npx -y obsidian-mcp-pro --vault "$VAULT_DIR" -s user
+  # On Windows, Git Bash paths (/c/Users/...) aren't understood by Windows processes.
+  # cygpath ships with Git for Windows; fall back to the raw path on non-Windows.
+  if command -v cygpath >/dev/null 2>&1; then
+    MCP_VAULT_PATH=$(cygpath -m "$VAULT_DIR")
+  else
+    MCP_VAULT_PATH="$VAULT_DIR"
+  fi
+  claude mcp add "$VAULT_NAME" npx -y obsidian-mcp-pro --vault "$MCP_VAULT_PATH" -s user
 else
   echo "Note: Claude Code not found — skipping MCP registration."
   echo "      Once installed, run:"
