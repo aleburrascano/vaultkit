@@ -53,6 +53,15 @@ else
 fi
 
 echo ""
+echo "Configuration"
+echo "-------------"
+if [ -n "${VAULTKIT_HOME:-}" ]; then
+  ok "VAULTKIT_HOME=$VAULTKIT_HOME"
+else
+  ok "Vaults root: $HOME/vaults (default — set VAULTKIT_HOME to override)"
+fi
+
+echo ""
 echo "Registered Vaults"
 echo "-----------------"
 

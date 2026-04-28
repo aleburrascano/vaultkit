@@ -1,6 +1,15 @@
 # vaultkit
 
-Obsidian wiki management — one package, eight commands.
+A package manager for Obsidian vaults — powered by GitHub and Claude Code.
+
+vaultkit lets you publish, discover, and connect to knowledge wikis the same way npm lets you publish and install packages. Each vault is a GitHub repo with a built-in MCP server. One command to connect, and it's immediately available as a tool in every Claude Code session — no configuration, no manual setup.
+
+**The ecosystem in three steps:**
+1. Someone publishes a vault (`vaultkit init`) — a structured Obsidian wiki with a public GitHub Pages site
+2. You connect to it (`vaultkit connect owner/repo`) — clones it locally and registers it as an MCP server in Claude Code
+3. Open any project in Claude Code — the vault's knowledge is instantly queryable, always up to date
+
+Connect as many vaults as you want. They live in your `~/vaults/` folder, each registered under its own MCP namespace, ready to query the moment you start a new chat.
 
 ```bash
 npm install -g @aleburrascano/vaultkit
@@ -117,6 +126,18 @@ Multiple wikis are available simultaneously under their own MCP namespaces:
 2. Add a source file to `raw/` and create wiki pages in `wiki/`
 3. Open a pull request — CI automatically checks for duplicate source filenames
 4. The maintainer reviews and merges
+
+## Configuration
+
+| Variable | Default | Description |
+|---|---|---|
+| `VAULTKIT_HOME` | `~/vaults` | Root directory where `vaultkit connect` clones vaults |
+
+Set in your shell profile to override the default:
+
+```bash
+export VAULTKIT_HOME=~/Documents/vaults
+```
 
 ## Platform support
 

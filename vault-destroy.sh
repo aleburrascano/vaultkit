@@ -16,14 +16,43 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-VAULT_DIR="${VAULTKIT_HOME:-$HOME/vaults}/$VAULT_NAME"
+if command -v cygpath >/dev/null 2>&1; then
+  CLAUDE_JSON=$(cygpath -m "$HOME/.claude.json")
+else
+  CLAUDE_JSON="$HOME/.claude.json"
+fi
+
+# Look up vault path from MCP registry first
+VAULT_DIR=$(node -e "
+const fs = require('fs');
+const path = require('path');
+const file = process.argv[1];
+const name = process.argv[2];
+if (!fs.existsSync(file)) process.exit(1);
+let config;
+try { config = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { process.exit(1); }
+const s = (config.mcpServers || {})[name];
+if (!s || !s.args) process.exit(1);
+const scriptArg = s.args.find(a => String(a).endsWith('.mcp-start.js'));
+if (!scriptArg) process.exit(1);
+console.log(path.dirname(scriptArg));
+" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || VAULT_DIR=""
+
+if [ -z "$VAULT_DIR" ]; then
+  VAULT_DIR="${VAULTKIT_HOME:-$HOME/vaults}/$VAULT_NAME"
+fi
+
+# Convert Windows path to POSIX for bash file operations
+if command -v cygpath >/dev/null 2>&1 && [[ "$VAULT_DIR" =~ ^[A-Za-z]: ]]; then
+  VAULT_DIR_POSIX=$(cygpath -u "$VAULT_DIR")
+else
+  VAULT_DIR_POSIX="$VAULT_DIR"
+fi
 
 # Refuse to destroy anything that doesn't look like an Obsidian vault.
-# Accepts vaults opened in Obsidian (.obsidian/) and vault-init created ones
-# that haven't been opened yet (CLAUDE.md + raw/ + wiki/).
-if [ -d "$VAULT_DIR" ]; then
-  if ! [ -d "$VAULT_DIR/.obsidian" ] && \
-     ! { [ -f "$VAULT_DIR/CLAUDE.md" ] && [ -d "$VAULT_DIR/raw" ] && [ -d "$VAULT_DIR/wiki" ]; }; then
+if [ -d "$VAULT_DIR_POSIX" ]; then
+  if ! [ -d "$VAULT_DIR_POSIX/.obsidian" ] && \
+     ! { [ -f "$VAULT_DIR_POSIX/CLAUDE.md" ] && [ -d "$VAULT_DIR_POSIX/raw" ] && [ -d "$VAULT_DIR_POSIX/wiki" ]; }; then
     echo "Error: $VAULT_DIR does not look like an Obsidian vault — aborting."
     exit 1
   fi
@@ -40,8 +69,8 @@ fi
 
 echo ""
 echo "This will permanently delete:"
-[ -d "$VAULT_DIR" ]  && echo "  Local:  $VAULT_DIR" \
-                     || echo "  Local:  $VAULT_DIR (not found — will skip)"
+[ -d "$VAULT_DIR_POSIX" ] && echo "  Local:  $VAULT_DIR" \
+                           || echo "  Local:  $VAULT_DIR (not found — will skip)"
 [ -n "$GITHUB_USER" ] && echo "  GitHub: https://github.com/$GITHUB_USER/$VAULT_NAME" \
                       || echo "  GitHub: (not authenticated — will skip)"
 echo "  MCP:    $VAULT_NAME server registration"
@@ -74,9 +103,9 @@ else
 fi
 
 # Delete local directory last (safest order: remote first, local last)
-if [ -d "$VAULT_DIR" ]; then
+if [ -d "$VAULT_DIR_POSIX" ]; then
   echo "Deleting local vault..."
-  rm -rf "$VAULT_DIR"
+  rm -rf "$VAULT_DIR_POSIX"
 else
   echo "Local directory not found — skipping."
 fi

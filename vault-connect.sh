@@ -57,10 +57,10 @@ fi
 
 # gh handles auth for private repos; fall back to plain git for public
 if command -v gh >/dev/null 2>&1; then
-  echo "Cloning $REPO..."
+  echo "Cloning $REPO into $VAULT_DIR..."
   gh repo clone "$REPO" "$VAULT_DIR"
 else
-  echo "Cloning $REPO (gh not found — private repos require credentials)..."
+  echo "Cloning $REPO into $VAULT_DIR (gh not found — private repos require credentials)..."
   git clone "https://github.com/$REPO.git" "$VAULT_DIR"
 fi
 
@@ -90,4 +90,4 @@ claude mcp add --scope user "$VAULT_NAME" -- node "$MCP_VAULT_PATH/.mcp-start.js
 
 echo ""
 echo "Done. $VAULT_NAME is now available in Claude Code."
-echo "  Vault: $VAULT_DIR"
+echo "  Vault: $MCP_VAULT_PATH"

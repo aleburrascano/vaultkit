@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Create a new Obsidian wiki vault with Quartz + GitHub Pages, fully automated.
 #
-# Usage:   vault-init <vault-name> [--private]
-# Example: vault-init my-cooking-wiki
-#
-# Install: bash <(curl -fsSL https://raw.githubusercontent.com/aleburrascano/vault-init/main/install.sh)
+# Usage:   vaultkit init <vault-name> [--private]
+# Example: vaultkit init my-cooking-wiki
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
@@ -35,10 +33,15 @@ if ! command -v gh >/dev/null 2>&1; then
   echo "  GitHub CLI not found — installing..."
   if $IS_WINDOWS && command -v winget >/dev/null 2>&1; then
     winget install --id GitHub.cli -e --accept-package-agreements --accept-source-agreements
-    # Refresh PATH with the WinGet links dir where gh lands
-    if [ -n "${LOCALAPPDATA:-}" ] && command -v cygpath >/dev/null 2>&1; then
-      WL=$(cygpath -u "${LOCALAPPDATA}/Microsoft/WinGet/Links")
-      [ -d "$WL" ] && export PATH="$WL:$PATH"
+    # Refresh PATH — gh MSI lands in Program Files; WinGet may also create a shim link
+    if command -v cygpath >/dev/null 2>&1; then
+      for WIN_DIR in \
+        "${PROGRAMFILES:-C:/Program Files}/GitHub CLI" \
+        "C:/Program Files/GitHub CLI" \
+        "${LOCALAPPDATA:-}/Microsoft/WinGet/Links"; do
+        POSIX_DIR=$(cygpath -u "$WIN_DIR" 2>/dev/null || true)
+        [ -n "$POSIX_DIR" ] && [ -d "$POSIX_DIR" ] && export PATH="$POSIX_DIR:$PATH"
+      done
     fi
   elif command -v brew >/dev/null 2>&1; then
     brew install gh
