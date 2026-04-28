@@ -18,6 +18,10 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   echo "Error: vault name must contain only letters, numbers, hyphens, and underscores."
   exit 1
 fi
+if [ ${#VAULT_NAME} -gt 64 ]; then
+  echo "Error: vault name must be 64 characters or less."
+  exit 1
+fi
 
 # VAULT_INIT_CWD is injected by the Node.js wrapper as the user's real working
 # directory (bash's own pwd returns the npm package dir, not where the user ran the command).
@@ -110,7 +114,15 @@ fi
 
 [ -d "$VAULT_DIR" ] && { echo "Error: $VAULT_DIR already exists"; exit 1; }
 
-GITHUB_USER=$(gh api user --jq '.login')
+GITHUB_USER=$(gh api user --jq '.login' 2>/dev/null) || {
+  echo "Error: Could not fetch your GitHub username."
+  echo "  Run: gh auth status   — then re-run vaultkit init."
+  exit 1
+}
+[ -z "$GITHUB_USER" ] && {
+  echo "Error: GitHub returned an empty username. Try: gh auth refresh"
+  exit 1
+}
 BASE_URL="$GITHUB_USER.github.io/$VAULT_NAME"
 
 # Transactional rollback — undo exactly what was created, in reverse order.
@@ -249,6 +261,10 @@ const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const r = spawnSync(npx, ['-y', 'obsidian-mcp-pro', '--vault', __dirname], {
   stdio: 'inherit',
 });
+if (r.error) {
+  process.stderr.write('[vaultkit] Failed to start MCP server: ' + r.error.message + '\n');
+  process.stderr.write('[vaultkit] Check your internet connection and try restarting Claude Code.\n');
+}
 process.exit(r.status ?? 0);
 JS
 
@@ -332,11 +348,24 @@ EOF
 
 # Clone and configure Quartz
 echo "[3/8] Cloning Quartz (may take ~30s)..."
-git clone --depth 1 https://github.com/jackyzha0/quartz .quartz
+if ! git clone --depth 1 https://github.com/jackyzha0/quartz .quartz 2>&1; then
+  echo ""
+  echo "Error: Could not clone Quartz. Check your internet connection and try again."
+  exit 1
+fi
 rm -rf .quartz/.git
 
 echo "[4/8] Installing Quartz dependencies (may take ~60s)..."
-(cd .quartz && npm install --silent)
+if ! (cd .quartz && npm install --silent); then
+  echo "  First attempt failed — retrying with full output..."
+  (cd .quartz && npm install) || {
+    echo ""
+    echo "Error: Could not install Quartz dependencies."
+    echo "  - Check your internet connection and try again"
+    echo "  - Update npm: npm install -g npm@latest"
+    exit 1
+  }
+fi
 
 node -e "
 const fs = require('fs');
@@ -366,18 +395,22 @@ git remote add origin "https://github.com/$GITHUB_USER/$VAULT_NAME.git"
 
 # Enable GitHub Pages before the push triggers the deploy workflow
 echo "[7/8] Enabling Pages and pushing..."
-gh api "repos/$GITHUB_USER/$VAULT_NAME/pages" \
+if ! gh api "repos/$GITHUB_USER/$VAULT_NAME/pages" \
   --method POST -f build_type=workflow \
-  >/dev/null 2>&1 || true
+  >/dev/null 2>&1; then
+  echo "  Note: Could not auto-enable GitHub Pages."
+  echo "  Enable manually: https://github.com/$GITHUB_USER/$VAULT_NAME/settings/pages"
+  echo "    -> Under 'Build and deployment', set Source to 'GitHub Actions'"
+fi
 
 # Push — triggers deploy
 git push -u origin main
 
 # Protect main branch — force contributions through PRs
 echo "[8/8] Protecting main branch..."
-gh api "repos/$GITHUB_USER/$VAULT_NAME/branches/main/protection" \
+if ! gh api "repos/$GITHUB_USER/$VAULT_NAME/branches/main/protection" \
   --method PUT \
-  --input - >/dev/null << 'JSON'
+  --input - >/dev/null 2>&1 << 'JSON'
 {
   "required_status_checks": null,
   "enforce_admins": false,
@@ -385,6 +418,10 @@ gh api "repos/$GITHUB_USER/$VAULT_NAME/branches/main/protection" \
   "restrictions": null
 }
 JSON
+then
+  echo "  Note: Branch protection not applied (may require a paid plan for private repos)."
+  echo "  Set up manually: https://github.com/$GITHUB_USER/$VAULT_NAME/settings/branches"
+fi
 
 # Compute MCP vault path once (Windows needs a Windows-format path for Claude)
 if command -v cygpath >/dev/null 2>&1; then

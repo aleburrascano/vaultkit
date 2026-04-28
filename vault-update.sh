@@ -58,6 +58,21 @@ fi
 
 echo "Updating $VAULT_NAME at $VAULT_DIR..."
 
+if [ -f "$VAULT_DIR_POSIX/.mcp-start.js" ]; then
+  CURRENT_HASH=$(node -e "
+const c=require('crypto'),fs=require('fs');
+console.log(c.createHash('sha256').update(fs.readFileSync(process.argv[1])).digest('hex'));
+" "$VAULT_DIR_POSIX/.mcp-start.js" 2>/dev/null || echo "unknown")
+  echo "  Current .mcp-start.js SHA-256: $CURRENT_HASH"
+fi
+echo ""
+read -r -p "Update .mcp-start.js to the latest version? [y/N] " _CONFIRM
+if ! [[ "${_CONFIRM:-}" =~ ^[Yy]$ ]]; then
+  echo "Aborted."
+  exit 0
+fi
+echo ""
+
 cat > "$VAULT_DIR_POSIX/.mcp-start.js" << 'JS'
 #!/usr/bin/env node
 const { spawnSync } = require('child_process');
@@ -72,6 +87,10 @@ const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
 const r = spawnSync(npx, ['-y', 'obsidian-mcp-pro', '--vault', __dirname], {
   stdio: 'inherit',
 });
+if (r.error) {
+  process.stderr.write('[vaultkit] Failed to start MCP server: ' + r.error.message + '\n');
+  process.stderr.write('[vaultkit] Check your internet connection and try restarting Claude Code.\n');
+}
 process.exit(r.status ?? 0);
 JS
 

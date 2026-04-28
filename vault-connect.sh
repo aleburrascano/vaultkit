@@ -58,10 +58,23 @@ fi
 # gh handles auth for private repos; fall back to plain git for public
 if command -v gh >/dev/null 2>&1; then
   echo "Cloning $REPO into $VAULT_DIR..."
-  gh repo clone "$REPO" "$VAULT_DIR"
+  if ! gh repo clone "$REPO" "$VAULT_DIR" 2>&1; then
+    echo ""
+    echo "Error: Could not clone '$REPO'."
+    echo "  If the repo is private, check access: gh auth status"
+    exit 1
+  fi
 else
-  echo "Cloning $REPO into $VAULT_DIR (gh not found — private repos require credentials)..."
-  git clone "https://github.com/$REPO.git" "$VAULT_DIR"
+  echo "Note: GitHub CLI (gh) not installed — private repos will not be accessible."
+  echo "  Install gh for full functionality: https://cli.github.com"
+  echo ""
+  echo "Cloning $REPO into $VAULT_DIR..."
+  if ! git clone "https://github.com/$REPO.git" "$VAULT_DIR" 2>&1; then
+    echo ""
+    echo "Error: Could not clone '$REPO'."
+    echo "  If it's a private repo, install gh and authenticate: gh auth login"
+    exit 1
+  fi
 fi
 
 if ! [ -f "$VAULT_DIR/.mcp-start.js" ]; then

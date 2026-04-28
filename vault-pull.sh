@@ -45,8 +45,14 @@ for (const [name, s] of vaults) {
   }
 
   const r = spawnSync('git', ['pull', '--ff-only', '--quiet'], {
-    cwd: vaultDir, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'],
+    cwd: vaultDir, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000,
   });
+
+  if (r.signal === 'SIGTERM' || (r.error && r.error.code === 'ETIMEDOUT')) {
+    console.log(name + ': pull timed out — check your network connection');
+    skipped++;
+    continue;
+  }
 
   if (r.status === 0) {
     const out = (r.stdout || '').trim();
