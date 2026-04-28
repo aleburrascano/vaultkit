@@ -54,11 +54,11 @@ fi
 # Remove MCP registration
 if command -v claude >/dev/null 2>&1; then
   echo "Removing MCP server..."
-  claude mcp remove "$VAULT_NAME" -s user 2>/dev/null \
+  claude mcp remove "$VAULT_NAME" --scope user 2>/dev/null \
     && true || echo "  (not registered — skipping)"
 else
   echo "Claude Code not found — MCP cleanup skipped."
-  echo "  If registered, run: claude mcp remove $VAULT_NAME -s user"
+  echo "  If registered, run: claude mcp remove $VAULT_NAME --scope user"
 fi
 
 # Delete local directory last (safest order: remote first, local last)

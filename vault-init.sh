@@ -80,12 +80,38 @@ fi
 GITHUB_USER=$(gh api user --jq '.login')
 BASE_URL="$GITHUB_USER.github.io/$VAULT_NAME"
 
-# Clean up the local directory if anything fails after this point.
-# (GitHub repo, if already created, must be deleted manually.)
-trap '[[ $? -ne 0 ]] && [[ -d "${VAULT_DIR}" ]] && { echo ""; echo "Setup failed — removing partial vault at ${VAULT_DIR}"; rm -rf "${VAULT_DIR}"; }' EXIT
+# Transactional rollback — undo exactly what was created, in reverse order.
+CREATED_DIR=false
+CREATED_REPO=false
+REGISTERED_MCP=false
+
+cleanup() {
+  local code=$?
+  [ $code -eq 0 ] && return
+  echo ""
+  echo "Setup failed — rolling back..."
+  if $REGISTERED_MCP && command -v claude >/dev/null 2>&1; then
+    claude mcp remove "$VAULT_NAME" --scope user 2>/dev/null && \
+      echo "  MCP registration removed." || true
+  fi
+  if $CREATED_REPO; then
+    if gh repo delete "$GITHUB_USER/$VAULT_NAME" --yes 2>/dev/null; then
+      echo "  GitHub repo deleted."
+    else
+      echo "  Warning: could not delete GitHub repo — run manually:"
+      echo "    gh repo delete $GITHUB_USER/$VAULT_NAME --yes"
+    fi
+  fi
+  if $CREATED_DIR && [ -d "${VAULT_DIR}" ]; then
+    rm -rf "${VAULT_DIR}"
+    echo "  Local directory removed."
+  fi
+}
+trap cleanup EXIT
 
 echo "[2/8] Creating vault: $VAULT_NAME"
 mkdir -p "$VAULT_DIR"
+CREATED_DIR=true
 cd "$VAULT_DIR"
 
 # Vault structure
@@ -260,6 +286,7 @@ git commit -m "chore: initialize ${VAULT_NAME}"
 # Create GitHub repo (no push yet — Pages must be enabled first)
 echo "[6/8] Creating GitHub repo: $VAULT_NAME ($REPO_VISIBILITY)..."
 gh repo create "$VAULT_NAME" --"$REPO_VISIBILITY"
+CREATED_REPO=true
 git remote add origin "https://github.com/$GITHUB_USER/$VAULT_NAME.git"
 
 # Enable GitHub Pages before the push triggers the deploy workflow
@@ -302,11 +329,12 @@ fi
 
 if command -v claude >/dev/null 2>&1; then
   echo "Registering MCP server: $VAULT_NAME"
-  claude mcp add "$VAULT_NAME" npx -y obsidian-mcp-pro --vault "$MCP_VAULT_PATH" -s user
+  claude mcp add --scope user "$VAULT_NAME" -- npx -y obsidian-mcp-pro --vault "$MCP_VAULT_PATH"
+  REGISTERED_MCP=true
 else
   echo "Note: Claude Code CLI not installed — skipping MCP registration."
   echo "      Once installed, run:"
-  echo "      claude mcp add $VAULT_NAME npx -y obsidian-mcp-pro --vault $MCP_VAULT_PATH -s user"
+  echo "      claude mcp add --scope user $VAULT_NAME -- npx -y obsidian-mcp-pro --vault $MCP_VAULT_PATH"
 fi
 
 echo ""
