@@ -58,12 +58,15 @@ You maintain this personal knowledge wiki. Read this at session start, then sear
 1. Read raw source fully.
 2. Discuss takeaways before writing pages.
 3. Create source page in \`wiki/sources/\`.
-4. Update or create pages for entities/concepts touched.
-5. Update \`index.md\`. Append \`log.md\` entry.
+4. Update or create pages in \`wiki/topics/\` (synthesis) and \`wiki/concepts/\` touched.
+5. Update \`index.md\` (one line per page: \`- [[Page]] — summary\`). Append \`log.md\` entry (\`## [YYYY-MM-DD] ingest | title\`).
 
 ### Query
-Use \`search_notes\` first → \`get_note\` on top 1–3 hits → synthesize with citations.
-Prefer \`wiki/topics/\` hits — they're pre-synthesized. Read \`index.md\` only for ingest/lint.
+Use \`search_notes\` (folder: \`wiki\`) first → \`get_note\` on top 1–3 hits → synthesize.
+\`wiki/topics/\` = synthesis pages (start here). \`wiki/sources/\` = per-source detail.
+
+### Lint (on request)
+Find: orphans, contradictions, missing cross-refs, index drift. Discuss before bulk edits.
 
 ## Session start
 - **Queries**: read this → \`search_notes\` directly → respond.
