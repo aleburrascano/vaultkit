@@ -1,20 +1,31 @@
-# vault-init
+# vaultkit
 
-One command to spin up a collaborative Obsidian wiki with GitHub Pages, PR gating, duplicate source detection, and Claude Code MCP access.
+Obsidian wiki management — one package, three commands.
 
 ```bash
-npm install -g @aleburrascano/vault-init
-vault-init my-wiki --private
+npm install -g @aleburrascano/vaultkit
+vaultkit help
 ```
 
-## What it sets up
+## Commands
+
+```
+vaultkit init <name> [--private]   Create a new vault with GitHub Pages + MCP
+vaultkit connect <owner/repo>      Clone a vault and register it as an MCP server
+vaultkit destroy <name>            Delete a vault locally, on GitHub, and from MCP
+vaultkit help                      Show this reference
+```
+
+## What a vault is
+
+Each vault is an Obsidian wiki backed by a GitHub repo with:
 
 | | |
 |---|---|
-| **Site** | `https://your-username.github.io/my-wiki` — deployed automatically on every push to `main` |
+| **Site** | `https://your-username.github.io/<name>` — deployed automatically on every push to `main` |
 | **PR gating** | `main` is branch-protected — all changes go through pull requests |
 | **Duplicate check** | CI blocks PRs that add a source file whose name already exists in `raw/` |
-| **MCP server** | The wiki is registered as a Claude Code MCP server so you can query it from any project |
+| **MCP server** | The vault is registered as a Claude Code MCP server so you can query it from any project |
 
 ## Prerequisites
 
@@ -23,22 +34,41 @@ Only two things must be installed manually:
 - **Node.js 22+** — [nodejs.org](https://nodejs.org)
 - **Git** (+ Git Bash on Windows) — [git-scm.com](https://git-scm.com)
 
-Everything else — GitHub CLI, GitHub authentication, git user config, Claude Code — is handled interactively the first time you run `vault-init`.
+Everything else — GitHub CLI, GitHub authentication, git user config, Claude Code — is handled interactively the first time you run `vaultkit init`.
 
 ## Usage
 
+### Create a vault
+
 ```bash
-vault-init <name>            # public repo + site
-vault-init <name> --private  # private repo (site is still public via GitHub Pages)
+vaultkit init my-wiki            # public repo + site
+vaultkit init my-wiki --private  # private repo (site is still public via GitHub Pages)
 ```
 
-On first run, `vault-init` will:
+On first run, `vaultkit init` will:
 1. Install GitHub CLI if missing (via winget / brew / apt / dnf)
 2. Open a browser for GitHub authentication if not logged in
 3. Prompt for your git name and email if not configured
 4. Ask whether to install Claude Code CLI (required for MCP registration)
 
-After that, every subsequent `vault-init` runs completely unattended.
+After that, every subsequent `vaultkit init` runs completely unattended.
+
+### Connect to someone else's vault
+
+```bash
+vaultkit connect owner/repo
+vaultkit connect https://github.com/owner/repo
+```
+
+Clones the vault and registers it as an MCP server. The MCP server auto-pulls on every Claude Code session start, so you always query the latest merged content without any manual `git pull`.
+
+### Remove a vault
+
+```bash
+vaultkit destroy my-wiki
+```
+
+Deletes the local directory, GitHub repository, and MCP registration. Prompts for the `delete_repo` GitHub permission on first use (handled automatically via browser).
 
 ## Vault structure
 
@@ -62,26 +92,9 @@ my-wiki/
 └── .quartz/          ← Quartz static site generator (hidden from Obsidian)
 ```
 
-## Connecting to someone else's vault
-
-```bash
-vault-connect owner/repo
-vault-connect https://github.com/owner/repo
-```
-
-Clones the vault locally and registers it as an MCP server in one command. The MCP server auto-pulls on every session start, so you always query the latest merged content without any manual `git pull`.
-
-## Removing a vault
-
-```bash
-vault-destroy my-wiki
-```
-
-Deletes the local directory, GitHub repository, and MCP registration. Prompts for the `delete_repo` GitHub permission on first use (handled automatically via browser).
-
 ## Using with Claude Code
 
-After `vault-init` (or `vault-connect`) runs, open any project in Claude Code — your wiki is immediately available:
+After `vaultkit init` or `vaultkit connect`, open any project in Claude Code — your wiki is immediately available:
 
 ```
 search_notes    full-text search across all wiki pages

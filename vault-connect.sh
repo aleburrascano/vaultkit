@@ -6,8 +6,8 @@
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
-  echo "Usage: vault-connect <owner/repo>"
-  echo "       vault-connect https://github.com/owner/repo"
+  echo "Usage: vaultkit connect <owner/repo>"
+  echo "       vaultkit connect https://github.com/owner/repo"
   exit 1
 fi
 

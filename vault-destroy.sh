@@ -5,7 +5,7 @@
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
-  echo "Usage: vault-destroy <vault-name>"
+  echo "Usage: vaultkit destroy <vault-name>"
   exit 1
 fi
 

@@ -1,25 +1,23 @@
 {
-  "name": "@aleburrascano/vault-init",
-  "version": "1.3.5",
+  "name": "@aleburrascano/vaultkit",
+  "version": "1.0.0",
   "type": "module",
-  "description": "Initialize Obsidian wikis with GitHub Pages, Quartz, and Claude Code MCP — fully automated.",
+  "description": "Obsidian wiki management — create, connect, and destroy vaults with GitHub Pages and Claude Code MCP.",
   "bin": {
-    "vault-init": "./bin/vault-init.js",
-    "vault-destroy": "./bin/vault-destroy.js",
-    "vault-connect": "./bin/vault-connect.js"
+    "vaultkit": "./bin/vaultkit.js"
   },
   "files": [
     "vault-init.sh",
     "vault-destroy.sh",
     "vault-connect.sh",
     "install.sh",
-    "bin/"
+    "bin/vaultkit.js"
   ],
   "keywords": ["obsidian", "vault", "wiki", "claude-code", "mcp", "github-pages", "quartz"],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/aleburrascano/vault-init"
+    "url": "https://github.com/aleburrascano/vaultkit"
   },
   "engines": {
     "node": ">=22"

@@ -8,7 +8,7 @@
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
-  echo "Usage: vault-init <vault-name> [--private]"
+  echo "Usage: vaultkit init <vault-name> [--private]"
   exit 1
 fi
 
