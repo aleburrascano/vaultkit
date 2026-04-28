@@ -17,29 +17,48 @@ else
   CLAUDE_JSON="$HOME/.claude.json"
 fi
 
-# Find vault path from MCP registration first, fall back to CWD/<name>
+# Look up vault path from MCP registry first
 VAULT_DIR=$(node -e "
 const fs = require('fs');
 const path = require('path');
 const file = process.argv[1];
 const name = process.argv[2];
 if (!fs.existsSync(file)) process.exit(1);
-const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+let config;
+try { config = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { process.exit(1); }
 const s = (config.mcpServers || {})[name];
 if (!s || !s.args) process.exit(1);
 const scriptArg = s.args.find(a => String(a).endsWith('.mcp-start.js'));
 if (!scriptArg) process.exit(1);
 console.log(path.dirname(scriptArg));
-" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || VAULT_DIR=""
 
-if ! [ -d "$VAULT_DIR" ]; then
-  echo "Error: vault not found at $VAULT_DIR"
-  exit 1
+# Fall back to CWD/<name> with identity check
+if [ -z "$VAULT_DIR" ]; then
+  VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+  if ! [ -d "$VAULT_DIR" ]; then
+    echo "Error: '$VAULT_NAME' not found in MCP registry or at $VAULT_DIR"
+    echo "Run 'vaultkit list' to see registered vaults."
+    exit 1
+  fi
+  if ! [ -f "$VAULT_DIR/CLAUDE.md" ] || ! [ -d "$VAULT_DIR/raw" ] || ! [ -d "$VAULT_DIR/wiki" ]; then
+    if ! [ -d "$VAULT_DIR/.obsidian" ]; then
+      echo "Error: $VAULT_DIR does not look like a vaultkit vault — aborting."
+      exit 1
+    fi
+  fi
 fi
 
-echo "Updating $VAULT_NAME..."
+# Convert Windows path to POSIX for bash file operations
+if command -v cygpath >/dev/null 2>&1 && [[ "$VAULT_DIR" =~ ^[A-Za-z]: ]]; then
+  VAULT_DIR_POSIX=$(cygpath -u "$VAULT_DIR")
+else
+  VAULT_DIR_POSIX="$VAULT_DIR"
+fi
 
-cat > "$VAULT_DIR/.mcp-start.js" << 'JS'
+echo "Updating $VAULT_NAME at $VAULT_DIR..."
+
+cat > "$VAULT_DIR_POSIX/.mcp-start.js" << 'JS'
 #!/usr/bin/env node
 const { spawnSync } = require('child_process');
 
@@ -59,4 +78,6 @@ JS
 echo "  Updated .mcp-start.js"
 echo ""
 echo "Commit and push to apply:"
-echo "  cd \"$VAULT_DIR\" && git add .mcp-start.js && git commit -m 'chore: update mcp-start.js' && git push"
+echo "  cd \"$VAULT_DIR_POSIX\" && git add .mcp-start.js && git commit -m 'chore: update mcp-start.js' && git push"
+echo ""
+echo "Note: if main is branch-protected, open a pull request instead."

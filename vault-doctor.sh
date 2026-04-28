@@ -70,13 +70,26 @@ const path = require('path');
 const file = process.argv[1];
 if (!fs.existsSync(file)) { console.log('  No vaults registered.'); process.exit(0); }
 
-const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(file, 'utf8'));
+} catch {
+  console.log('  x Could not parse .claude.json');
+  process.exit(1);
+}
+
 const servers = config.mcpServers || {};
 const vaults = Object.entries(servers).filter(([, s]) =>
   s.args && s.args.some(a => String(a).endsWith('.mcp-start.js'))
 );
+const others = Object.keys(servers).filter(k =>
+  !servers[k].args || !servers[k].args.some(a => String(a).endsWith('.mcp-start.js'))
+);
 
-if (vaults.length === 0) { console.log('  No vaults registered.'); process.exit(0); }
+if (vaults.length === 0 && others.length === 0) {
+  console.log('  No vaults registered.');
+  process.exit(0);
+}
 
 let issues = 0;
 for (const [name, s] of vaults) {
@@ -87,13 +100,19 @@ for (const [name, s] of vaults) {
     console.log('      Fix: vaultkit connect <owner/' + name + '>');
     issues++;
   } else if (!fs.existsSync(path.join(vaultDir, '.mcp-start.js'))) {
-    console.log('  ! ' + name + ' — missing .mcp-start.js (created with old vault-init)');
+    console.log('  ! ' + name + ' — missing .mcp-start.js (old vault-init vault)');
     console.log('      Fix: vaultkit update ' + name);
     issues++;
   } else {
     console.log('  + ' + name + '  (' + vaultDir + ')');
   }
 }
+
+if (others.length > 0) {
+  console.log('');
+  console.log('  Other MCP servers (not managed by vaultkit): ' + others.join(', '));
+}
+
 process.exit(issues);
 " "$CLAUDE_JSON" || VAULT_ISSUES=$?
 

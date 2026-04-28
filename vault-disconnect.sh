@@ -21,29 +21,33 @@ if ! [[ "$VAULT_NAME" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   exit 1
 fi
 
-# Resolve claude.json with a Windows-compatible path for node
 if command -v cygpath >/dev/null 2>&1; then
   CLAUDE_JSON=$(cygpath -m "$HOME/.claude.json")
 else
   CLAUDE_JSON="$HOME/.claude.json"
 fi
 
-# Look up vault path from MCP registry; fall back to CWD/<name>
+# Require the vault to be in the MCP registry — no CWD fallback (too dangerous)
 VAULT_DIR=$(node -e "
 const fs = require('fs');
 const path = require('path');
 const file = process.argv[1];
 const name = process.argv[2];
 if (!fs.existsSync(file)) process.exit(1);
-const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+let config;
+try { config = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { process.exit(1); }
 const s = (config.mcpServers || {})[name];
 if (!s || !s.args) process.exit(1);
 const scriptArg = s.args.find(a => String(a).endsWith('.mcp-start.js'));
 if (!scriptArg) process.exit(1);
 console.log(path.dirname(scriptArg));
-" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
+" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || {
+  echo "Error: '$VAULT_NAME' is not a registered vaultkit vault."
+  echo "Run 'vaultkit list' to see what's registered."
+  exit 1
+}
 
-# Convert Windows path back to POSIX for bash file operations
+# Convert Windows path to POSIX for bash file operations
 if command -v cygpath >/dev/null 2>&1 && [[ "$VAULT_DIR" =~ ^[A-Za-z]: ]]; then
   VAULT_DIR_POSIX=$(cygpath -u "$VAULT_DIR")
 else
@@ -65,7 +69,6 @@ if [ "$CONFIRM" != "$VAULT_NAME" ]; then
 fi
 echo ""
 
-# Remove MCP registration
 if command -v claude >/dev/null 2>&1; then
   echo "Removing MCP server..."
   claude mcp remove "$VAULT_NAME" --scope user 2>/dev/null \
@@ -75,7 +78,6 @@ else
   echo "  If registered, run: claude mcp remove $VAULT_NAME --scope user"
 fi
 
-# Delete local directory
 if [ -d "$VAULT_DIR_POSIX" ]; then
   echo "Deleting local vault..."
   rm -rf "$VAULT_DIR_POSIX"

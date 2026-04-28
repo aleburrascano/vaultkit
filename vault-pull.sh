@@ -16,7 +16,14 @@ const { spawnSync } = require('child_process');
 const file = process.argv[1];
 if (!fs.existsSync(file)) { console.log('No vaults registered.'); process.exit(0); }
 
-const config = JSON.parse(fs.readFileSync(file, 'utf8'));
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(file, 'utf8'));
+} catch {
+  console.error('Error: could not parse .claude.json');
+  process.exit(1);
+}
+
 const servers = config.mcpServers || {};
 const vaults = Object.entries(servers).filter(([, s]) =>
   s.args && s.args.some(a => String(a).endsWith('.mcp-start.js'))
@@ -32,7 +39,7 @@ for (const [name, s] of vaults) {
   const vaultDir = path.dirname(scriptArg);
 
   if (!fs.existsSync(vaultDir)) {
-    console.log(name + ': directory missing — skipping');
+    console.log(name + ': directory missing — run: vaultkit connect <owner/' + name + '>');
     skipped++;
     continue;
   }
@@ -46,7 +53,10 @@ for (const [name, s] of vaults) {
     console.log(name + ': ' + (out || 'already up to date'));
     synced++;
   } else {
-    console.log(name + ': pull failed — ' + (r.stderr || '').trim());
+    const err = (r.stderr || '').trim();
+    console.log(name + ': pull failed');
+    if (err) console.log('  ' + err);
+    console.log('  Fix: cd \"' + vaultDir + '\" && git status');
     skipped++;
   }
 }

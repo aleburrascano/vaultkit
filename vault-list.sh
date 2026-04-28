@@ -2,7 +2,6 @@
 # List all vaultkit-managed MCP servers.
 set -euo pipefail
 
-# Resolve .claude.json (Windows needs a Windows-format path for Node.js)
 if command -v cygpath >/dev/null 2>&1; then
   CLAUDE_JSON=$(cygpath -m "$HOME/.claude.json")
 else
@@ -17,9 +16,15 @@ const { execSync } = require('child_process');
 const file = process.argv[1];
 if (!fs.existsSync(file)) { console.log('No vaults registered.'); process.exit(0); }
 
-const config = JSON.parse(fs.readFileSync(file, 'utf8'));
-const servers = config.mcpServers || {};
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(file, 'utf8'));
+} catch {
+  console.error('Error: could not parse .claude.json');
+  process.exit(1);
+}
 
+const servers = config.mcpServers || {};
 const vaults = Object.entries(servers).filter(([, s]) =>
   s.args && s.args.some(a => String(a).endsWith('.mcp-start.js'))
 );

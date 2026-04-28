@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Clone an existing vault-init vault from GitHub and register it as an MCP server.
+# Clone an existing vaultkit vault from GitHub and register it as an MCP server.
 #
-# Usage: vault-connect <owner/repo>
-#        vault-connect https://github.com/owner/repo
+# Usage: vaultkit connect <owner/repo>
+#        vaultkit connect https://github.com/owner/repo
 set -euo pipefail
 
 if [ $# -eq 0 ]; then
@@ -30,20 +30,43 @@ VAULT_DIR="${VAULT_INIT_CWD:-$(pwd)}/$VAULT_NAME"
 
 [ -d "$VAULT_DIR" ] && { echo "Error: $VAULT_DIR already exists."; exit 1; }
 
+# Check if MCP name already registered
+if command -v cygpath >/dev/null 2>&1; then
+  CLAUDE_JSON=$(cygpath -m "$HOME/.claude.json")
+else
+  CLAUDE_JSON="$HOME/.claude.json"
+fi
+
+ALREADY_REGISTERED=$(node -e "
+const fs = require('fs');
+const file = process.argv[1];
+const name = process.argv[2];
+if (!fs.existsSync(file)) { console.log('no'); process.exit(0); }
+let config;
+try { config = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { console.log('no'); process.exit(0); }
+console.log((config.mcpServers || {})[name] ? 'yes' : 'no');
+" "$CLAUDE_JSON" "$VAULT_NAME" 2>/dev/null) || ALREADY_REGISTERED="no"
+
+if [ "$ALREADY_REGISTERED" = "yes" ]; then
+  echo "Error: an MCP server named '$VAULT_NAME' is already registered."
+  echo "Run 'vaultkit list' to see what's registered, or 'vaultkit disconnect $VAULT_NAME' first."
+  exit 1
+fi
+
 # gh handles auth for private repos; fall back to plain git for public
 if command -v gh >/dev/null 2>&1; then
   echo "Cloning $REPO..."
   gh repo clone "$REPO" "$VAULT_DIR"
 else
-  echo "Cloning $REPO (gh not found, using git — private repos require credentials)..."
+  echo "Cloning $REPO (gh not found — private repos require credentials)..."
   git clone "https://github.com/$REPO.git" "$VAULT_DIR"
 fi
 
 if ! [ -f "$VAULT_DIR/.mcp-start.js" ]; then
   echo ""
   echo "Warning: $VAULT_NAME is missing .mcp-start.js — it may have been created"
-  echo "  with an older version of vault-init. MCP registration skipped."
-  echo "  Ask the owner to upgrade and re-push, then re-run vault-connect."
+  echo "  with an older version. MCP registration skipped."
+  echo "  Ask the owner to run 'vaultkit update $VAULT_NAME' and push, then reconnect."
   exit 0
 fi
 
