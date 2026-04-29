@@ -12,27 +12,24 @@
     "vaultkit": "bin/vaultkit.js"
   },
   "files": [
-    "vault-init.sh",
-    "vault-connect.sh",
-    "vault-disconnect.sh",
-    "vault-destroy.sh",
-    "vault-pull.sh",
-    "vault-update.sh",
-    "vault-doctor.sh",
-    "vault-verify.sh",
-    "vault-status.sh",
-    "vault-backup.sh",
-    "vault-visibility.sh",
-    "install.sh",
     "bin/vaultkit.js",
-    "lib/_helpers.sh",
+    "src/",
     "lib/mcp-start.js.tmpl",
     "lib/deploy.yml.tmpl"
   ],
   "scripts": {
-    "lint": "shellcheck -x vault-*.sh install.sh lib/_helpers.sh",
-    "check": "node --check bin/vaultkit.js && node -e \"new (require('vm').Script)(require('fs').readFileSync('lib/mcp-start.js.tmpl', 'utf8'), {filename: 'mcp-start.js.tmpl'})\"",
-    "test": "npm run check && npm run lint"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "node --check bin/vaultkit.js",
+    "lint": "shellcheck -x vault-*.sh install.sh lib/_helpers.sh"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^7.5.2",
+    "commander": "^12.1.0",
+    "execa": "^9.5.2"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.5"
   },
   "keywords": [
     "obsidian",
