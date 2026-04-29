@@ -75,16 +75,23 @@ spawnSync('git', ['merge', '--ff-only', '--quiet', '@{u}'], {
   timeout: 5000,
 });
 
-// 5. Windows: npx ships as npx.cmd which CreateProcess rejects. Prepend node's
+// 5. Ensure .obsidian/ exists for vault structure validation (gitignored by design).
+const obsidianDir = path.join(VAULT_DIR, '.obsidian');
+if (!fs.existsSync(obsidianDir)) {
+  try { fs.mkdirSync(obsidianDir, { recursive: true }); } catch (_) { /* best-effort */ }
+}
+
+// 6. Windows: npx ships as npx.cmd which CreateProcess rejects. Prepend node's
 // directory to PATH and use shell:true so cmd.exe resolves the .cmd shim.
 if (process.platform === 'win32') {
   const nodeDir = path.dirname(process.execPath);
   process.env.PATH = nodeDir + ';' + (process.env.PATH || '');
 }
 
-const r = spawnSync('npx', ['-y', 'obsidian-mcp-pro', '--vault', VAULT_DIR], {
+const r = spawnSync('npx', ['-y', 'obsidian-mcp-pro'], {
   stdio: 'inherit',
   shell: process.platform === 'win32',
+  env: { ...process.env, OBSIDIAN_VAULT_PATH: VAULT_DIR },
 });
 if (r.error) {
   abort([
