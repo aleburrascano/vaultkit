@@ -88,12 +88,6 @@ if gh api "repos/$REPO_SLUG/pages" >/dev/null 2>&1; then
   PAGES_PUBLIC="$PAGES_VISIBILITY"
 fi
 
-if $PAGES_EXISTS; then
-  CURRENT_MODE="$CURRENT_VIS-pages-$PAGES_PUBLIC"
-else
-  CURRENT_MODE="$CURRENT_VIS-no-pages"
-fi
-
 echo "Vault: $VAULT_NAME ($REPO_SLUG)"
 echo "Current: repo=$CURRENT_VIS, pages=$( $PAGES_EXISTS && echo "$PAGES_PUBLIC" || echo "disabled" )"
 echo "Target:  $TARGET"
