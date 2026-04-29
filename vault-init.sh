@@ -77,8 +77,8 @@ if ! command -v gh >/dev/null 2>&1; then
     : # found via cmd.exe PATH lookup — no install needed
   else
     echo "  GitHub CLI not found — installing..."
-    if $IS_WINDOWS && command -v winget >/dev/null 2>&1; then
-      winget install --id GitHub.cli -e --accept-package-agreements --accept-source-agreements
+    if $IS_WINDOWS && cmd //c "winget --version" >/dev/null 2>&1; then
+      cmd //c "winget install --id GitHub.cli -e --accept-package-agreements --accept-source-agreements"
       # Refresh PATH — gh MSI lands in Program Files; WinGet may also create a shim
       if command -v cygpath >/dev/null 2>&1; then
         for WIN_DIR in \

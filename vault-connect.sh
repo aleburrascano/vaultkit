@@ -130,16 +130,26 @@ MCP_VAULT_PATH=$(vk_to_windows "$VAULT_DIR")
 
 if ! command -v claude >/dev/null 2>&1; then
   echo ""
-  echo "Claude Code not found. Once installed, run:"
-  echo "  claude mcp add --scope user $VAULT_NAME -- node $MCP_VAULT_PATH/.mcp-start.js --expected-sha256=$MCP_HASH"
-  CLONED=false  # cloned successfully; user does manual MCP add
+  read -r -p "Claude Code CLI not found. Install it now? [y/N] " _INSTALL_CLAUDE
+  if [[ "${_INSTALL_CLAUDE:-}" =~ ^[Yy]$ ]]; then
+    echo "Installing Claude Code CLI..."
+    npm install -g @anthropic-ai/claude-code || true
+  fi
+fi
+
+if command -v claude >/dev/null 2>&1; then
+  echo "Registering MCP server: $VAULT_NAME"
+  claude mcp add --scope user "$VAULT_NAME" -- node "$MCP_VAULT_PATH/.mcp-start.js" "--expected-sha256=$MCP_HASH"
+  CLONED=false  # success — disable rollback
+  echo ""
+  echo "Done. $VAULT_NAME is now available in Claude Code."
+  echo "  Vault: $MCP_VAULT_PATH"
   exit 0
 fi
 
-echo "Registering MCP server: $VAULT_NAME"
-claude mcp add --scope user "$VAULT_NAME" -- node "$MCP_VAULT_PATH/.mcp-start.js" "--expected-sha256=$MCP_HASH"
-CLONED=false  # success — disable rollback
-
+# Claude still not found — preserve clone, print manual command
 echo ""
-echo "Done. $VAULT_NAME is now available in Claude Code."
-echo "  Vault: $MCP_VAULT_PATH"
+vk_warning "Claude Code CLI not installed — MCP registration skipped."
+echo "  Once installed, run:" >&2
+echo "  claude mcp add --scope user $VAULT_NAME -- node $MCP_VAULT_PATH/.mcp-start.js --expected-sha256=$MCP_HASH" >&2
+CLONED=false

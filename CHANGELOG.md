@@ -4,6 +4,12 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-04-29
+
+### Fixed
+- **`vaultkit connect` now offers to install Claude Code CLI** — when the CLI is missing after cloning and the user confirms MCP registration, `connect` prompts to install via `npm install -g @anthropic-ai/claude-code` and registers on success. Previously it bailed with a manual `claude mcp add` command and left the vault unregistered (`vaultkit status` showed nothing).
+- **`vaultkit init` gh auto-install works on Windows** — winget is an App Execution Alias and is not reachable via `command -v` in Git Bash. The install now runs via `cmd //c "winget install ..."`, matching the pattern already used for `where gh`. Previously fell through to "cannot auto-install gh" on all fresh Windows machines.
+
 ## [2.0.0] - 2026-04-29
 
 ### Added
