@@ -1,201 +1,150 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Command } from 'commander';
 
-const COMMANDS = {
-  init:       'vault-init.sh',
-  connect:    'vault-connect.sh',
-  disconnect: 'vault-disconnect.sh',
-  destroy:    'vault-destroy.sh',
-  pull:       'vault-pull.sh',
-  update:     'vault-update.sh',
-  doctor:     'vault-doctor.sh',
-  verify:     'vault-verify.sh',
-  status:     'vault-status.sh',
-  backup:     'vault-backup.sh',
-  visibility: 'vault-visibility.sh',
-};
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
 
-const HELP = `
-vaultkit — Obsidian wiki management
-
-CREATE & CONNECT
-  vaultkit init <name>                Create a new vault from scratch
-  vaultkit connect <owner/repo>       Clone someone else's vault and register it
-
-EVERYDAY USE
-  vaultkit status [name]              See your vaults + git state (or detailed status for one)
-  vaultkit pull                       Sync all vaults from their upstream
-  vaultkit backup <name>              Snapshot a vault to a local zip
-
-WHEN SOMETHING'S WRONG
-  vaultkit doctor                     Check environment + flag broken vaults
-  vaultkit update <name>              Vault is missing layout files or has a stale launcher
-  vaultkit verify <name>              Launcher refused to start (pinned SHA-256 mismatch)
-
-CHANGE OR REMOVE
-  vaultkit visibility <name> <mode>   Toggle public / private / auth-gated
-  vaultkit disconnect <name>          Stop using locally — keep the GitHub repo
-  vaultkit destroy <name>             Delete locally + on GitHub
-
-  vaultkit help                       Show this reference
-
-Flags:
-  --verbose, -v   Enable trace output (sets VAULTKIT_VERBOSE=1 for scripts)
-  --version       Print vaultkit version + runtime info
-  --help,    -h   Per-command usage (e.g., 'vaultkit init --help')
-
-Environment:
-  VAULTKIT_HOME            Vaults root directory (default: ~/vaults)
-  VAULTKIT_LOG             If set, append timestamped command audit log to this file
-  VAULTKIT_PULL_TIMEOUT    Per-vault timeout for 'vaultkit pull' (default: 30000ms)
-`.trim();
-
-const sub = process.argv[2];
-
-if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
-  console.log(HELP);
-  process.exit(0);
+function auditLog(command, args, exitCode, start) {
+  const logFile = process.env.VAULTKIT_LOG;
+  if (!logFile) return;
+  const duration = Date.now() - start;
+  const line = `${new Date().toISOString()}\t${command}\t${args.join(' ')}\t${exitCode}\t${duration}ms\n`;
+  try { appendFileSync(logFile, line); } catch { /* ignore */ }
 }
 
-if (sub === '--version') {
-  printVersion();
-  process.exit(0);
-}
-
-const script = COMMANDS[sub];
-if (!script) {
-  process.stderr.write(`vaultkit: unknown command "${sub}"\nRun "vaultkit help" for usage.\n`);
-  process.exit(1);
-}
-
-// Pull --verbose / -v out of the args before passing through to the script.
-const rawArgs = process.argv.slice(3);
-const verbose = rawArgs.includes('--verbose') || rawArgs.includes('-v');
-const scriptArgs = rawArgs.filter(a => a !== '--verbose' && a !== '-v');
-
-const cwd = resolve(import.meta.dirname, '..');
-const env = { ...process.env };
-if (verbose) env.VAULTKIT_VERBOSE = '1';
-
-let bash = 'bash';
-
-if (process.platform === 'win32') {
-  const toUnix = p => p
-    .replace(/\\/g, '/')
-    .replace(/^([A-Za-z]):\//, (_, d) => `/${d.toLowerCase()}/`)
-    .replace(/\/$/, '');
-
-  const gitRoots = [
-    process.env.PROGRAMFILES         && join(process.env.PROGRAMFILES,         'Git'),
-    process.env['PROGRAMFILES(X86)'] && join(process.env['PROGRAMFILES(X86)'], 'Git'),
-    process.env.LOCALAPPDATA         && join(process.env.LOCALAPPDATA,         'Programs', 'Git'),
-  ].filter(Boolean);
-
-  let bashPath = null;
-  for (const root of gitRoots) {
-    const candidate = join(root, 'bin', 'bash.exe');
-    if (existsSync(candidate)) { bashPath = candidate; break; }
-  }
-
-  if (!bashPath) {
-    const where = spawnSync('where', ['bash'], { encoding: 'utf8' });
-    const found = (where.stdout || '').trim().split('\n')
-      .map(s => s.trim())
-      .filter(s => s && !s.toLowerCase().includes('system32'));
-    if (found.length > 0) {
-      bashPath = found[0];
-    } else {
-      process.stderr.write(
-        'vaultkit: Git for Windows bash not found.\n' +
-        'Install Git for Windows: https://git-scm.com\n'
-      );
-      process.exit(1);
-    }
-  }
-  bash = bashPath;
-
-  const toolDirs = new Set([dirname(bash), dirname(process.execPath)]);
-  for (const tool of ['gh', 'claude']) {
-    const r = spawnSync('where', [tool], { encoding: 'utf8' });
-    if (r.status === 0 && r.stdout.trim()) {
-      toolDirs.add(dirname(r.stdout.trim().split('\n')[0].trim()));
-    }
-  }
-
-  // Probe known gh install locations directly — `where` misses installs made in the
-  // current session because the registry PATH change never reaches running processes.
-  const ghCandidates = [
-    process.env.PROGRAMFILES && join(process.env.PROGRAMFILES, 'GitHub CLI'),
-    'C:\\Program Files\\GitHub CLI',
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Links'),
-    process.env.LOCALAPPDATA && join(process.env.LOCALAPPDATA, 'Microsoft', 'WinGet', 'Packages',
-      'GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe', 'tools'),
-  ].filter(Boolean);
-  for (const p of ghCandidates) {
-    if (existsSync(join(p, 'gh.exe'))) { toolDirs.add(p); break; }
-  }
-
-  const existing = (env.PATH || '').split(';').filter(Boolean).map(toUnix);
-  env.PATH = [...new Set([...[...toolDirs].map(toUnix), ...existing])].join(':');
-}
-
-const startedAt = Date.now();
-const result = spawnSync(bash, [script, ...scriptArgs], {
-  cwd,
-  stdio: 'inherit',
-  env,
-});
-
-if (result.error) {
-  process.stderr.write(`vaultkit: failed to launch bash — ${result.error.message}\n`);
-  writeAuditLog(sub, scriptArgs, 1, Date.now() - startedAt);
-  process.exit(1);
-}
-
-const exitCode = result.status ?? 1;
-writeAuditLog(sub, scriptArgs, exitCode, Date.now() - startedAt);
-process.exit(exitCode);
-
-function writeAuditLog(command, args, code, durationMs) {
-  const logPath = process.env.VAULTKIT_LOG;
-  if (!logPath) return;
+async function wrap(fn, commandName, args) {
+  const start = Date.now();
   try {
-    mkdirSync(dirname(logPath), { recursive: true });
-    const line = [
-      new Date().toISOString(),
-      command,
-      args.join(' '),
-      `exit=${code}`,
-      `${durationMs}ms`,
-    ].join('\t') + '\n';
-    appendFileSync(logPath, line);
-  } catch {
-    // Logging must never break the command. Swallow.
+    await fn();
+    auditLog(commandName, args, 0, start);
+  } catch (err) {
+    auditLog(commandName, args, 1, start);
+    if (err?.message) {
+      process.stderr.write(`Error: ${err.message}\n`);
+    }
+    process.exit(1);
   }
 }
 
-function printVersion() {
-  const root = resolve(import.meta.dirname, '..');
-  const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const program = new Command();
+program
+  .name('vaultkit')
+  .description('Obsidian wiki management')
+  .version(pkg.version)
+  .option('-v, --verbose', 'enable trace output');
 
-  const cfgPath = process.platform === 'win32'
-    ? (process.env.USERPROFILE ? join(process.env.USERPROFILE, '.claude.json') : null)
-    : (process.env.HOME ? join(process.env.HOME, '.claude.json') : null);
-  let count = 0;
-  if (cfgPath && existsSync(cfgPath)) {
-    try {
-      const cfg = JSON.parse(readFileSync(cfgPath, 'utf8'));
-      const servers = cfg.mcpServers || {};
-      count = Object.values(servers).filter(s =>
-        s && s.args && s.args.some(a => String(a).endsWith('.mcp-start.js'))
-      ).length;
-    } catch {}
-  }
+program
+  .command('init <name>')
+  .description('Create a new vault from scratch')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/init.js');
+      await run(name);
+    }, 'init', [name]);
+  });
 
-  console.log('vaultkit  ' + pkg.version);
-  console.log('node      ' + process.version);
-  console.log('platform  ' + process.platform + ' ' + process.arch);
-  console.log('vaults    ' + count + ' registered');
-}
+program
+  .command('connect <input>')
+  .description('Clone an existing vault and register it as MCP server')
+  .action(async (input) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/connect.js');
+      await run(input);
+    }, 'connect', [input]);
+  });
+
+program
+  .command('disconnect <name>')
+  .description('Remove vault locally and from MCP (keeps GitHub repo)')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/disconnect.js');
+      await run(name);
+    }, 'disconnect', [name]);
+  });
+
+program
+  .command('destroy <name>')
+  .description('Delete vault locally, on GitHub, and from MCP')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/destroy.js');
+      await run(name);
+    }, 'destroy', [name]);
+  });
+
+program
+  .command('pull')
+  .description('Sync all vaults from upstream')
+  .action(async () => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/pull.js');
+      await run();
+    }, 'pull', []);
+  });
+
+program
+  .command('update <name>')
+  .description('Refresh launcher and restore missing layout files')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/update.js');
+      await run(name);
+    }, 'update', [name]);
+  });
+
+program
+  .command('doctor')
+  .description('Check environment and flag broken vaults')
+  .action(async () => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/doctor.js');
+      const issues = await run();
+      if (issues > 0) process.exit(1);
+    }, 'doctor', []);
+  });
+
+program
+  .command('verify <name>')
+  .description('Inspect launcher SHA-256 and re-pin if needed')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/verify.js');
+      await run(name);
+    }, 'verify', [name]);
+  });
+
+program
+  .command('status [name]')
+  .description('Show vault registry + git state')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/status.js');
+      await run(name);
+    }, 'status', name ? [name] : []);
+  });
+
+program
+  .command('backup <name>')
+  .description('Snapshot a vault to a local zip')
+  .action(async (name) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/backup.js');
+      await run(name);
+    }, 'backup', [name]);
+  });
+
+program
+  .command('visibility <name> <mode>')
+  .description('Toggle public / private / auth-gated')
+  .action(async (name, mode) => {
+    await wrap(async () => {
+      const { run } = await import('../src/commands/visibility.js');
+      await run(name, mode);
+    }, 'visibility', [name, mode]);
+  });
+
+program.parseAsync(process.argv);

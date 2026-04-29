@@ -20,8 +20,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "check": "node --check bin/vaultkit.js",
-    "lint": "shellcheck -x vault-*.sh install.sh lib/_helpers.sh"
+    "check": "node --check bin/vaultkit.js"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.5.2",
