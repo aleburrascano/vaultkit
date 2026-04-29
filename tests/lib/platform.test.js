@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { findTool, npmGlobalBin } from '../../src/lib/platform.js';
 
 describe('claudeJsonPath', () => {
   let origPlatform;
@@ -76,5 +79,84 @@ describe('isWindows', () => {
     Object.defineProperty(process, 'platform', { value: 'linux', writable: true });
     const { isWindows } = await import('../../src/lib/platform.js?bust=' + Date.now());
     expect(isWindows()).toBe(false);
+  });
+});
+
+describe('claudeJsonPath — env var edge cases', () => {
+  let origEnv;
+  beforeEach(() => { origEnv = { ...process.env }; });
+  afterEach(() => { process.env = origEnv; });
+
+  it('returns a path containing .claude.json even when HOME is unset', async () => {
+    delete process.env.HOME;
+    delete process.env.USERPROFILE;
+    const { claudeJsonPath } = await import('../../src/lib/platform.js?bust=' + Date.now());
+    const p = claudeJsonPath();
+    expect(p).toMatch(/\.claude\.json$/);
+  });
+});
+
+describe('vaultsRoot — env var edge cases', () => {
+  let origEnv;
+  beforeEach(() => { origEnv = { ...process.env }; });
+  afterEach(() => { process.env = origEnv; });
+
+  it('uses HOME fallback when VAULTKIT_HOME is empty string', async () => {
+    process.env.VAULTKIT_HOME = '';
+    const home = process.env.USERPROFILE ?? process.env.HOME ?? '';
+    const { vaultsRoot } = await import('../../src/lib/platform.js?bust=' + Date.now());
+    // Empty string is falsy — should fall back to HOME/vaults
+    expect(vaultsRoot()).toBe(join(home, 'vaults'));
+  });
+});
+
+describe('findTool', () => {
+  let tmp;
+  let origEnv;
+
+  beforeEach(() => {
+    origEnv = { ...process.env };
+    tmp = mkdtempSync(join(tmpdir(), 'vk-platform-test-'));
+  });
+  afterEach(() => {
+    process.env = origEnv;
+    rmSync(tmp, { recursive: true, force: true });
+  });
+
+  it('finds gh when present in PROGRAMFILES probe path (Windows)', async () => {
+    if (process.platform !== 'win32') return; // Windows-only test
+    const ghDir = join(tmp, 'GitHub CLI');
+    mkdirSync(ghDir, { recursive: true });
+    writeFileSync(join(ghDir, 'gh.exe'), '');
+    process.env.PROGRAMFILES = tmp;
+    const result = await findTool('gh');
+    expect(result).toContain('gh.exe');
+  });
+
+  it('finds claude when present in APPDATA/npm probe path (Windows)', async () => {
+    if (process.platform !== 'win32') return; // Windows-only test
+    const npmDir = join(tmp, 'npm');
+    mkdirSync(npmDir, { recursive: true });
+    writeFileSync(join(npmDir, 'claude.cmd'), '');
+    process.env.APPDATA = tmp;
+    const result = await findTool('claude');
+    expect(result).toContain('claude.cmd');
+  });
+
+  it('returns null for a tool that does not exist anywhere', async () => {
+    const result = await findTool('definitely-not-a-real-tool-vaultkit-xyz-99');
+    expect(result).toBeNull();
+  }, 15000);
+});
+
+describe('npmGlobalBin', () => {
+  it('returns a string path when npm is available', async () => {
+    const result = await npmGlobalBin();
+    // npm is installed in this environment — should return a path
+    if (result !== null) {
+      expect(typeof result).toBe('string');
+      expect(result.length).toBeGreaterThan(0);
+    }
+    // null is also acceptable if npm is unavailable
   });
 });

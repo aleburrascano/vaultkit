@@ -78,4 +78,14 @@ describe('_parsePagesJson', () => {
     expect(_parsePagesJson('{"visibility":"public"}')).toBe('public');
     expect(_parsePagesJson('{"visibility":"private"}')).toBe('private');
   });
+
+  it('defaults to public when neither public nor visibility field present', () => {
+    expect(_parsePagesJson('{"html_url":"https://example.github.io"}')).toBe('public');
+  });
+});
+
+describe('_parseUserJson — edge cases', () => {
+  it('throws when given an empty object', () => {
+    expect(() => _parseUserJson('{}')).toThrow(/login/);
+  });
 });

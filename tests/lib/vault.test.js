@@ -108,6 +108,20 @@ describe('isVaultLike', () => {
 
 // ── sha256 ────────────────────────────────────────────────────────────────────
 
+describe('isVaultLike — edge cases', () => {
+  it('returns false when path is a file, not a directory', () => {
+    const f = join(tmp, 'notadir.txt');
+    writeFileSync(f, 'hello');
+    expect(isVaultLike(f)).toBe(false);
+  });
+});
+
+describe('sha256 — edge cases', () => {
+  it('throws on a non-existent file', async () => {
+    await expect(sha256(join(tmp, 'no-such-file.txt'))).rejects.toThrow();
+  });
+});
+
 describe('sha256', () => {
   it('returns correct hex hash of a file', async () => {
     const p = join(tmp, 'test.txt');

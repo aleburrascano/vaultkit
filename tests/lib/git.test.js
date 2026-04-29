@@ -161,4 +161,56 @@ describe('archiveZip', () => {
     const stat = statSync(out);
     expect(stat.size).toBeGreaterThan(0);
   });
+
+  it('throws on a repo with no commits', async () => {
+    const dir = join(tmp, 'empty');
+    mkdirSync(dir);
+    await makeRepo(dir);
+    const out = join(tmp, 'out.zip');
+    await expect(archiveZip(dir, out)).rejects.toThrow();
+  }, 10000);
+});
+
+describe('getStatus — edge cases', () => {
+  it('returns safe defaults on a non-git directory', async () => {
+    const dir = join(tmp, 'notgit');
+    mkdirSync(dir);
+    const status = await getStatus(dir);
+    expect(status.dirty).toBe(false);
+    expect(status.ahead).toBe(0);
+    expect(status.behind).toBe(0);
+    expect(status.remote).toBeNull();
+  });
+});
+
+describe('pull — conflict and failure', () => {
+  it('returns success:false with stderr on diverged histories (ff-only)', async () => {
+    const bare = join(tmp, 'bare.git');
+    const c1 = join(tmp, 'c1');
+    const c2 = join(tmp, 'c2');
+
+    await execa('git', ['init', '--bare', '-b', 'main', bare]);
+    await execa('git', ['clone', bare, c1]);
+    await execa('git', ['clone', bare, c2]);
+    for (const c of [c1, c2]) {
+      await execa('git', ['-C', c, 'config', 'user.email', 'test@test.com']);
+      await execa('git', ['-C', c, 'config', 'user.name', 'Test']);
+    }
+
+    // c1 makes an initial commit and pushes
+    writeFileSync(join(c1, 'file.txt'), 'line from c1');
+    await execa('git', ['-C', c1, 'add', '.']);
+    await execa('git', ['-C', c1, 'commit', '-m', 'c1 commit']);
+    await execa('git', ['-C', c1, 'push', '-u', 'origin', 'main']);
+
+    // c2 makes its own commit (diverges) without pulling first
+    writeFileSync(join(c2, 'file.txt'), 'line from c2');
+    await execa('git', ['-C', c2, 'add', '.']);
+    await execa('git', ['-C', c2, 'commit', '-m', 'c2 commit']);
+    await execa('git', ['-C', c2, 'fetch']);
+
+    const result = await pull(c2);
+    expect(result.success).toBe(false);
+    expect(result.stderr).toBeTruthy();
+  }, 15000);
 });

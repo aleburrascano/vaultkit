@@ -62,4 +62,54 @@ describe('pull command', () => {
     const { run } = await import('../../src/commands/pull.js');
     await run({ cfgPath, log: () => {} });
   });
+
+  it('logs synced when new commits are pulled', async () => {
+    const bare = join(tmp, 'bare.git');
+    const c1 = join(tmp, 'c1');
+    const vaultDir = join(tmp, 'MyVault');
+    await execa('git', ['init', '--bare', '-b', 'main', bare]);
+    await execa('git', ['clone', bare, c1]);
+    await execa('git', ['clone', bare, vaultDir]);
+    for (const d of [c1, vaultDir]) {
+      await execa('git', ['-C', d, 'config', 'user.email', 'test@test.com']);
+      await execa('git', ['-C', d, 'config', 'user.name', 'Test']);
+    }
+    // c1 commits and pushes; vaultDir is behind
+    writeFileSync(join(c1, 'newfile.txt'), 'content');
+    await execa('git', ['-C', c1, 'add', '.']);
+    await execa('git', ['-C', c1, 'commit', '-m', 'new commit']);
+    await execa('git', ['-C', c1, 'push', '-u', 'origin', 'main']);
+    await execa('git', ['-C', vaultDir, 'fetch']);
+
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, { MyVault: vaultDir });
+    const { run } = await import('../../src/commands/pull.js');
+    const lines = [];
+    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    expect(lines.some(l => /synced/i.test(l))).toBe(true);
+  }, 15000);
+
+  it('skips missing vaults and pulls the rest', async () => {
+    const bare = join(tmp, 'bare.git');
+    const vaultDir = join(tmp, 'RealVault');
+    await execa('git', ['init', '--bare', '-b', 'main', bare]);
+    await execa('git', ['clone', bare, vaultDir]);
+    await execa('git', ['-C', vaultDir, 'config', 'user.email', 'test@test.com']);
+    await execa('git', ['-C', vaultDir, 'config', 'user.name', 'Test']);
+    writeFileSync(join(vaultDir, 'f.txt'), 'hi');
+    await execa('git', ['-C', vaultDir, 'add', '.']);
+    await execa('git', ['-C', vaultDir, 'commit', '-m', 'init']);
+    await execa('git', ['-C', vaultDir, 'push', '-u', 'origin', 'main']);
+
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, {
+      GhostVault: '/nonexistent/ghost',
+      RealVault: vaultDir,
+    });
+    const { run } = await import('../../src/commands/pull.js');
+    const lines = [];
+    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    expect(lines.some(l => /GhostVault.*miss|skip/i.test(l))).toBe(true);
+    expect(lines.some(l => /RealVault.*(up.to.date|synced)/i.test(l))).toBe(true);
+  }, 15000);
 });
