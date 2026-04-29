@@ -1,87 +1,94 @@
 # VaultKit
 
-CLI that connects Claude Code to Obsidian vaults via MCP. No build step. Zero npm dependencies.
+CLI that connects Claude Code to Obsidian vaults via MCP. No build step required.
 
 ## Commands
-test:  npm test
-build: (none — published files)
-lint:  npm run lint
+test:       npm test
+test:watch: npm run test:watch
+check:      npm run check
 
 ## Architecture
 
-**Dispatch flow**: `vaultkit <cmd>` → `bin/vaultkit.js` (COMMANDS lookup) → `vault-<cmd>.sh` (bash, cwd = package root)
+**Runtime**: Node.js ≥22, ESM (`"type": "module"`)
 
-**State**: `~/.claude.json` — the `mcpServers` object is the vault registry. Scripts read it via shared helpers in `lib/_helpers.sh`.
+**Dispatch flow**: `vaultkit <cmd>` → `bin/vaultkit.js` (commander) → `src/commands/<cmd>.js`
 
-**Launcher template**: `lib/mcp-start.js.tmpl` is the single source of truth for the per-vault `.mcp-start.js`. `vault-init.sh` and `vault-update.sh` `cp` it into vaults — never duplicate the template inline.
+**State**: `~/.claude.json` — the `mcpServers` object is the vault registry. Commands read it via `src/lib/registry.js`.
 
-**Windows**: every script uses `vk_to_posix` / `vk_to_windows` helpers; `vault-init.sh` and `bin/vaultkit.js` probe known install paths for `gh`/`claude`. Never assume tools are on PATH.
+**Launcher template**: `lib/mcp-start.js.tmpl` is the single source of truth for the per-vault `.mcp-start.js`. `init.js` and `update.js` `copyFileSync` it into vaults — never duplicate the template inline.
 
-## Command → Script Map
+**Windows**: `src/lib/platform.js` provides `findTool`, `isWindows`, `vaultsRoot`, `claudeJsonPath`. Never assume `gh` or `claude` are on PATH — use `findTool`.
 
-| Command      | Script              |
-|-------------|---------------------|
-| init         | vault-init.sh       |
-| connect      | vault-connect.sh    |
-| disconnect   | vault-disconnect.sh |
-| destroy      | vault-destroy.sh    |
-| list         | vault-list.sh       |
-| pull         | vault-pull.sh       |
-| update       | vault-update.sh     |
-| doctor       | vault-doctor.sh     |
+**Audit logging**: Set `VAULTKIT_LOG=<path>` to append TSV rows (timestamp, command, args, exit code, duration) to a file.
+
+## Command → Module Map
+
+| Command    | Module                     |
+|-----------|----------------------------|
+| init       | src/commands/init.js       |
+| connect    | src/commands/connect.js    |
+| disconnect | src/commands/disconnect.js |
+| destroy    | src/commands/destroy.js    |
+| pull       | src/commands/pull.js       |
+| update     | src/commands/update.js     |
+| doctor     | src/commands/doctor.js     |
+| verify     | src/commands/verify.js     |
+| status     | src/commands/status.js     |
+| backup     | src/commands/backup.js     |
+| visibility | src/commands/visibility.js |
 
 To add a command: see `/add-command`.
 
-## Shared library — `lib/`
+## Shared Libraries — `src/lib/`
+
+| File | Key Exports |
+|---|---|
+| `registry.js` | `getAllVaults`, `getVaultDir`, `getExpectedHash` — reads `~/.claude.json` |
+| `vault.js` | `validateName`, `isVaultLike`, `sha256` + `render*` functions for vault file templates |
+| `platform.js` | `isWindows`, `claudeJsonPath`, `vaultsRoot`, `findTool`, `npmGlobalBin` |
+| `git.js` | `init`, `add`, `commit`, `push`, `pull`, `getStatus`, `pushOrPr`, `archiveZip`, `clone` |
+| `github.js` | `createRepo`, `deleteRepo`, `repoExists`, `isAdmin`, `getVisibility`, `enablePages`, and more |
+
+## Templates — `lib/`
 
 | File | Purpose |
 |---|---|
-| `lib/_helpers.sh` | Bash functions sourced by every `vault-*.sh`: `vk_resolve_vault_dir`, `vk_resolve_expected_hash`, `vk_is_vault_like`, `vk_to_posix`, `vk_to_windows`, `vk_claude_json`, `vk_sha256`, `vk_validate_vault_name`, `vk_error/warning/note`. |
-| `lib/mcp-start.js.tmpl` | Single source of truth for `.mcp-start.js`. Implements the launcher self-verification (pinned SHA-256 check + refuse-to-merge on upstream launcher change). |
+| `lib/mcp-start.js.tmpl` | Single source of truth for `.mcp-start.js`. SHA-256 self-verification on every Claude Code session. |
+| `lib/deploy.yml.tmpl` | GitHub Actions workflow for Quartz/GitHub Pages deployment. |
 
 Both are listed in `package.json#files` and ship with the npm package.
 
-## Local Development — No npm Publish Loop
+## Local Development
 
 ```bash
-# One-time: point the global `vaultkit` binary at this directory
-npm link
-
-# Now every file edit is live — no reinstall
+npm link          # one-time: point global vaultkit at this directory
 vaultkit <command>
-
-# Undo when done
-npm unlink -g @aleburrascano/vaultkit
+npm unlink -g @aleburrascano/vaultkit   # undo when done
 ```
 
 ## Adding a New Command (summary — use `/add-command` for guided scaffold)
 
-1. Create `vault-<name>.sh` at repo root. Required header:
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   . "$SCRIPT_DIR/lib/_helpers.sh"
-   ```
-2. Add a row to the `COMMANDS` map in `bin/vaultkit.js` (string key → script filename).
-3. Add `"vault-<name>.sh"` to the `files` array in `package.json`.
-4. Add a row to the `HELP` text in `bin/vaultkit.js` and to `README.md`.
+1. Create `src/commands/<name>.js`. Export `async function run(params, options = {})`.
+2. Add `.command('<name> ...')` to the `program` in `bin/vaultkit.js` with a dynamic `import('../src/commands/<name>.js')` inside `wrap()`.
+3. Confirm `src/` is in the `files` array in `package.json` (it already is).
+4. Add a row to README.md.
+5. Add an entry under `## [Unreleased]` in CHANGELOG.md.
 
 ## Security Invariants — Never Break These
 
-- **Vault names** must match `^[a-zA-Z0-9_-]+$`, max 64 chars. Use `vk_validate_vault_name`.
-- **Vault paths** for destructive ops must come from the MCP registry (`vk_resolve_vault_dir`), never raw user input or filesystem fallbacks. `connect`/`init` are the only commands allowed to create new entries.
+- **Vault names** must match `^[a-zA-Z0-9_-]+$`, max 64 chars. Use `validateName` from `src/lib/vault.js`.
+- **Vault paths** for destructive ops must come from the MCP registry (`getVaultDir` from `src/lib/registry.js`), never raw user input or filesystem fallbacks. `connect`/`init` are the only commands allowed to create new entries.
 - **MCP registration** must include `--expected-sha256=<hash>` so the launcher can self-verify on every Claude Code session.
-- **`gh repo delete`** must be preceded by an explicit ownership check (`gh api repos/.../permissions.admin`) and a typed-name confirmation.
-- **`.obsidian/` or `CLAUDE.md` + `raw/` + `wiki/`** must be present before any `rm -rf` (use `vk_is_vault_like`).
-- **`delete_repo` scope** must be requested only when actually about to delete (skip the prompt for collaborators who can't delete anyway).
+- **`gh repo delete`** must be preceded by an explicit ownership check (`isAdmin` from `src/lib/github.js`) and a typed-name confirmation.
+- **`isVaultLike`** from `src/lib/vault.js` must be checked before any directory deletion.
+- **`delete_repo` scope** must be requested only when actually about to delete (skip for collaborators who can't delete anyway).
 
 ## Hard Invariants
 
-- No npm dependencies — Node.js built-ins + shell utilities only.
-- No build step — repo files are published files. `lib/` ships verbatim.
-- Windows compatibility is mandatory — test `cygpath` branches via the helpers.
-- Never duplicate the `.mcp-start.js` template — `cp` it from `lib/mcp-start.js.tmpl`.
+- No build step — repo files are published files. `src/` ships verbatim.
+- Windows compatibility is mandatory — use `platform.js` helpers; test Windows path branches.
+- Never duplicate the `.mcp-start.js` template — `copyFileSync` from `lib/mcp-start.js.tmpl`.
+- ESM only — `"type": "module"` in package.json; no `require()`.
 
 ## Standing Workflows
 - Bug fix: write a failing test that reproduces the bug first. Show it fail. Fix it. Show it pass. Run full suite.

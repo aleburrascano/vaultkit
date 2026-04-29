@@ -1,20 +1,19 @@
 # Testing Rules
 
-Test runner: `npm test` (runs `check` + `lint`)
-Test command breakdown:
-- `node --check bin/vaultkit.js` — syntax check the dispatcher
-- `node -e "..." lib/mcp-start.js.tmpl` — syntax check the launcher template
-- `shellcheck -x vault-*.sh install.sh lib/_helpers.sh` — lint all bash scripts
+Test runner: `npm test` (runs vitest in single-pass mode)
+Watch mode: `npm run test:watch`
+
+Test files live in `tests/` and mirror the source tree:
+- `tests/lib/` — unit tests for `src/lib/*.js` modules
+- `tests/commands/` — integration tests for `src/commands/*.js`
 
 ## Testing discipline
 
-- Syntax errors must be caught before submission — the CI gate runs `npm test`.
-- Added bash scripts must pass `shellcheck` with no warnings.
-- Node.js files must have valid syntax (`node --check`).
-- Template files (`.tmpl`) must parse as valid JavaScript when executed.
-- After any bash script edit: run `npm test` before committing.
-- After any Node.js file edit: run `npm test` before committing.
+- After any file edit: run `npm test` before committing.
+- Syntax errors in `bin/vaultkit.js` are caught by `npm run check` (`node --check`).
+- Template files (`.tmpl`) must parse as valid JavaScript — verified by the check script.
+- Use vitest's built-in mocking (`vi.mock`, `vi.spyOn`) for external dependencies (git, gh, fs).
 
 ## Sacred tests rule
 
-The CI suite is read-only. Never skip tests or modify test logic to make something pass. Fix the implementation.
+Test files are read-only unless explicitly instructed. If a test is failing, fix the implementation, not the test. "The test was wrong" requires explicit human confirmation.
