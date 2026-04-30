@@ -10,8 +10,6 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "allowJs": true,
-    "checkJs": false,
     "noEmit": true,
     "sourceMap": true,
     "forceConsistentCasingInFileNames": true,
