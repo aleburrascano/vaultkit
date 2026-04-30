@@ -4,19 +4,21 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 vi.mock('../../src/lib/platform.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/platform.js')>();
   return { ...real, findTool: vi.fn() };
 });
 
 vi.mock('execa', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('execa')>();
   return { ...real, execa: vi.fn() };
 });
 
 import { findTool } from '../../src/lib/platform.js';
 import { execa } from 'execa';
 
-let tmp;
+interface VaultEntry { dir: string; hash: string | null }
+
+let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'vk-doctor-test-'));
@@ -28,8 +30,8 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function writeCfg(cfgPath, vaults) {
-  const mcpServers = {};
+function writeCfg(cfgPath: string, vaults: Record<string, VaultEntry>): void {
+  const mcpServers: Record<string, { command: string; args: string[] }> = {};
   for (const [name, { dir, hash }] of Object.entries(vaults)) {
     const args = [`${dir}/.mcp-start.js`];
     if (hash) args.push(`--expected-sha256=${hash}`);
@@ -38,38 +40,39 @@ function writeCfg(cfgPath, vaults) {
   writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
 }
 
-function mockAllToolsFound() {
-  vi.mocked(findTool).mockImplementation(async (name) => `/usr/bin/${name}`);
+function mockAllToolsFound(): void {
+  vi.mocked(findTool).mockImplementation(async (name: string) => `/usr/bin/${name}`);
 }
 
-function mockGitConfig(name = 'Test User', email = 'test@example.com') {
-  vi.mocked(execa).mockImplementation(async (cmd, args) => {
-    if (cmd === 'git' && args[0] === 'auth') return { exitCode: 0 };
-    if (args?.includes('user.name')) return { exitCode: 0, stdout: name };
-    if (args?.includes('user.email')) return { exitCode: 0, stdout: email };
-    return { exitCode: 0, stdout: '' };
-  });
+function mockGitConfig(name: string = 'Test User', email: string = 'test@example.com'): void {
+  vi.mocked(execa).mockImplementation((async (cmd: string, args?: readonly string[]) => {
+    if (cmd === 'git' && args?.[0] === 'auth') return { exitCode: 0, stdout: '', stderr: '' };
+    if (args?.includes('user.name')) return { exitCode: 0, stdout: name, stderr: '' };
+    if (args?.includes('user.email')) return { exitCode: 0, stdout: email, stderr: '' };
+    return { exitCode: 0, stdout: '', stderr: '' };
+  }) as never);
 }
 
-function mockGhAuth(authenticated = true) {
-  vi.mocked(execa).mockImplementation(async (cmd, args) => {
+function mockGhAuth(authenticated: boolean = true): void {
+  vi.mocked(execa).mockImplementation((async (cmd: string, args?: readonly string[]) => {
     if (args?.[0] === 'auth' && args?.[1] === 'status') {
       return { exitCode: authenticated ? 0 : 1, stdout: '', stderr: '' };
     }
-    if (args?.includes('user.name')) return { exitCode: 0, stdout: 'Test User' };
-    if (args?.includes('user.email')) return { exitCode: 0, stdout: 'test@example.com' };
-    return { exitCode: 0, stdout: '' };
-  });
+    if (args?.includes('user.name')) return { exitCode: 0, stdout: 'Test User', stderr: '' };
+    if (args?.includes('user.email')) return { exitCode: 0, stdout: 'test@example.com', stderr: '' };
+    return { exitCode: 0, stdout: '', stderr: '' };
+  }) as never);
 }
 
-function writeLauncher(dir, content = '// launcher') {
+function writeLauncher(dir: string, content: string = '// launcher'): void {
   writeFileSync(join(dir, '.mcp-start.js'), content, 'utf8');
 }
 
-async function runDoctor(cfgPath, log) {
+async function runDoctor(cfgPath: string, log?: (m: unknown) => void): Promise<{ issues: number; lines: string[] }> {
   const { run } = await import('../../src/commands/doctor.js');
-  const lines = [];
-  const issues = await run({ cfgPath, log: log ?? ((m) => lines.push(m)) });
+  const lines: string[] = [];
+  const captureLog = log ?? ((m: unknown) => lines.push(String(m)));
+  const issues = await run({ cfgPath, log: captureLog });
   return { issues, lines };
 }
 
@@ -79,7 +82,7 @@ describe('D-1: git not found', () => {
   it('reports fail for git and increments issues', async () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
-    vi.mocked(findTool).mockImplementation(async (name) => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
       if (name === 'git') return null;
       return `/usr/bin/${name}`;
     });
@@ -104,7 +107,7 @@ describe('D-2: node version check', () => {
 
     const { lines } = await runDoctor(cfgPath);
     // Current node in this env is >= 22 (project requires it)
-    const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
+    const nodeMajor = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
     if (nodeMajor >= 22) {
       expect(lines.some(l => /ok.*node/i.test(l))).toBe(true);
     }
@@ -117,13 +120,13 @@ describe('D-3: gh not found', () => {
   it('logs warn for gh but does not fail', async () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
-    vi.mocked(findTool).mockImplementation(async (name) => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
       if (name === 'gh') return null;
       return `/usr/bin/${name}`;
     });
     mockGitConfig();
 
-    const { issues, lines } = await runDoctor(cfgPath);
+    const { lines } = await runDoctor(cfgPath);
 
     expect(lines.some(l => /gh.*not found/i.test(l))).toBe(true);
     expect(lines.some(l => /warn/i.test(l))).toBe(true);
@@ -156,7 +159,7 @@ describe('D-5: claude not found', () => {
   it('logs warn and install hint for claude', async () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
-    vi.mocked(findTool).mockImplementation(async (name) => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
       if (name === 'claude') return null;
       return `/usr/bin/${name}`;
     });
@@ -176,11 +179,11 @@ describe('D-6: git config not set', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
     mockAllToolsFound();
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
-      if (args?.[0] === 'auth') return { exitCode: 0, stdout: '' };
+    vi.mocked(execa).mockImplementation((async (cmd: string, args?: readonly string[]) => {
+      if (args?.[0] === 'auth') return { exitCode: 0, stdout: '', stderr: '' };
       // git config returns empty stdout — not configured
-      return { exitCode: 0, stdout: '' };
-    });
+      return { exitCode: 0, stdout: '', stderr: '' };
+    }) as never);
 
     const { issues, lines } = await runDoctor(cfgPath);
 

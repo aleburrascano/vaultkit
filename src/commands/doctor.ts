@@ -1,11 +1,12 @@
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
 import { sha256, isVaultLike } from '../lib/vault.js';
-import { findTool } from '../lib/platform.js';
+import { findTool, claudeJsonPath } from '../lib/platform.js';
+import type { ClaudeConfig, LogFn, RunOptions } from '../types.js';
 
-async function checkTool(name, required, log) {
+async function checkTool(name: string, required: boolean, log: LogFn): Promise<boolean> {
   const path = await findTool(name);
   if (!path) {
     const level = required ? 'x fail' : '! warn';
@@ -16,7 +17,7 @@ async function checkTool(name, required, log) {
   return true;
 }
 
-export async function run({ cfgPath, log = console.log } = {}) {
+export async function run({ cfgPath, log = console.log }: RunOptions = {}): Promise<number> {
   let issues = 0;
 
   log('Prerequisites:');
@@ -26,7 +27,7 @@ export async function run({ cfgPath, log = console.log } = {}) {
   if (!gitOk) issues++;
 
   // node version — required >= 22
-  const nodeMajor = parseInt(process.versions.node.split('.')[0], 10);
+  const nodeMajor = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
   if (nodeMajor < 22) {
     log(`  x fail  node: v${process.versions.node} (v22+ required)`);
     issues++;
@@ -59,13 +60,15 @@ export async function run({ cfgPath, log = console.log } = {}) {
   // git config
   const nameResult = await execa('git', ['config', 'user.name'], { reject: false });
   const emailResult = await execa('git', ['config', 'user.email'], { reject: false });
-  if (!nameResult.stdout?.trim() || !emailResult.stdout?.trim()) {
+  const userName = String(nameResult.stdout ?? '').trim();
+  const userEmail = String(emailResult.stdout ?? '').trim();
+  if (!userName || !userEmail) {
     log('  x fail  git config: user.name or user.email not set');
     log('    Run: git config --global user.name "Your Name"');
     log('         git config --global user.email "you@example.com"');
     issues++;
   } else {
-    log(`  + ok   git config: ${nameResult.stdout.trim()} <${emailResult.stdout.trim()}>`);
+    log(`  + ok   git config: ${userName} <${userEmail}>`);
   }
 
   log('');
@@ -119,9 +122,8 @@ export async function run({ cfgPath, log = console.log } = {}) {
     }
 
     // Count non-vault MCP servers
-    const { readFileSync } = await import('node:fs');
     try {
-      const cfg = JSON.parse(readFileSync(cfgPath ?? (await import('../lib/platform.js')).claudeJsonPath(), 'utf8'));
+      const cfg = JSON.parse(readFileSync(cfgPath ?? claudeJsonPath(), 'utf8')) as ClaudeConfig;
       const allServers = Object.keys(cfg?.mcpServers ?? {});
       const vaultNames = new Set(vaults.map(v => v.name));
       const others = allServers.filter(n => !vaultNames.has(n));
