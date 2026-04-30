@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { getAllVaults } from '../lib/registry.js';
 import { pull } from '../lib/git.js';
-import { vaultsRoot } from '../lib/platform.js';
+import type { RunOptions } from '../types.js';
 
-export async function run({ cfgPath, log = console.log } = {}) {
+export async function run({ cfgPath, log = console.log }: RunOptions = {}): Promise<void> {
   const vaults = await getAllVaults(cfgPath);
 
   if (vaults.length === 0) {
@@ -28,7 +28,8 @@ export async function run({ cfgPath, log = console.log } = {}) {
       log(`  ${vault.name}: pull timed out`);
       skipped++;
     } else if (!result.success) {
-      const hint = result.stderr ? `: ${result.stderr.trim().split('\n')[0]}` : '';
+      const firstLine = result.stderr ? result.stderr.trim().split('\n')[0] ?? '' : '';
+      const hint = firstLine ? `: ${firstLine}` : '';
       log(`  ${vault.name}: pull failed${hint}`);
       log(`    Hint: cd "${vault.dir}" && git status`);
       skipped++;

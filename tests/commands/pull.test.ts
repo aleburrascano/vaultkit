@@ -4,25 +4,16 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
 
-let tmp;
+let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-pull-test-')); });
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
 
-function writeCfg(cfgPath, vaults) {
-  const mcpServers = {};
+function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
+  const mcpServers: Record<string, { command: string; args: string[] }> = {};
   for (const [name, dir] of Object.entries(vaults)) {
     mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
   }
   writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
-
-async function makeRepo(dir) {
-  await execa('git', ['init', '-b', 'main', dir]);
-  await execa('git', ['-C', dir, 'config', 'user.email', 'test@test.com']);
-  await execa('git', ['-C', dir, 'config', 'user.name', 'Test']);
-  writeFileSync(join(dir, 'README.md'), 'hello');
-  await execa('git', ['-C', dir, 'add', '.']);
-  await execa('git', ['-C', dir, 'commit', '-m', 'init']);
 }
 
 describe('pull command', () => {
@@ -30,8 +21,8 @@ describe('pull command', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeCfg(cfgPath, { MissingVault: '/nonexistent/path/vault' });
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
     expect(lines.some(l => /missing|skip/i.test(l))).toBe(true);
   });
 
@@ -51,8 +42,8 @@ describe('pull command', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
 
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
     expect(lines.some(l => /up.to.date|already/i.test(l))).toBe(true);
   });
 
@@ -84,8 +75,8 @@ describe('pull command', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeCfg(cfgPath, { MyVault: vaultDir });
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
     expect(lines.some(l => /synced/i.test(l))).toBe(true);
   }, 15000);
 
@@ -107,8 +98,8 @@ describe('pull command', () => {
       RealVault: vaultDir,
     });
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (msg) => lines.push(msg) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
     expect(lines.some(l => /GhostVault.*miss|skip/i.test(l))).toBe(true);
     expect(lines.some(l => /RealVault.*(up.to.date|synced)/i.test(l))).toBe(true);
   }, 15000);

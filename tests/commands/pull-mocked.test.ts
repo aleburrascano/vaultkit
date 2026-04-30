@@ -5,13 +5,13 @@ import { tmpdir } from 'node:os';
 
 // Mock git.pull so we can control its responses without real network I/O
 vi.mock('../../src/lib/git.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/git.js')>();
   return { ...real, pull: vi.fn() };
 });
 
 import { pull as mockPull } from '../../src/lib/git.js';
 
-let tmp;
+let tmp: string;
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'vk-pull-mock-'));
   vi.mocked(mockPull).mockReset();
@@ -20,15 +20,15 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function writeCfg(cfgPath, vaults) {
-  const mcpServers = {};
+function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
+  const mcpServers: Record<string, { command: string; args: string[] }> = {};
   for (const [name, dir] of Object.entries(vaults)) {
     mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
   }
   writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
 }
 
-function makeDir(path) {
+function makeDir(path: string): string {
   mkdirSync(path, { recursive: true });
   return path;
 }
@@ -45,8 +45,8 @@ describe('pull — mocked git scenarios', () => {
       .mockResolvedValueOnce({ success: true, upToDate: true, timedOut: false, stderr: '' });
 
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /Vault1.*fail/i.test(l))).toBe(true);
     expect(lines.some(l => /CONFLICT/i.test(l))).toBe(true);
@@ -66,8 +66,8 @@ describe('pull — mocked git scenarios', () => {
       .mockResolvedValueOnce({ success: true, upToDate: false, timedOut: false, stderr: '' });
 
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /Vault1.*timed? ?out/i.test(l))).toBe(true);
     expect(lines.some(l => /Vault2.*synced/i.test(l))).toBe(true);
@@ -85,8 +85,8 @@ describe('pull — mocked git scenarios', () => {
     });
 
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /NoRemote.*fail/i.test(l))).toBe(true);
     expect(lines.some(l => /no tracking/i.test(l))).toBe(true);
@@ -119,8 +119,8 @@ describe('pull — mocked git scenarios', () => {
       .mockResolvedValueOnce({ success: false, upToDate: false, timedOut: false, stderr: 'err' });
 
     const { run } = await import('../../src/commands/pull.js');
-    const lines = [];
-    await run({ cfgPath, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
 
     const summary = lines.find(l => /\d+ vault.s. synced/i.test(l));
     expect(summary).toMatch(/1 vault.s. synced/i);
