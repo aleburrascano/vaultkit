@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { findTool, npmGlobalBin } from '../../src/lib/platform.js';
 
 describe('claudeJsonPath', () => {
-  let origPlatform;
-  let origEnv;
+  let origPlatform: NodeJS.Platform;
+  let origEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     origPlatform = process.platform;
@@ -39,7 +39,7 @@ describe('claudeJsonPath', () => {
 });
 
 describe('vaultsRoot', () => {
-  let origEnv;
+  let origEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     origEnv = { ...process.env };
@@ -83,7 +83,7 @@ describe('isWindows', () => {
 });
 
 describe('claudeJsonPath — env var edge cases', () => {
-  let origEnv;
+  let origEnv: NodeJS.ProcessEnv;
   beforeEach(() => { origEnv = { ...process.env }; });
   afterEach(() => { process.env = origEnv; });
 
@@ -97,7 +97,7 @@ describe('claudeJsonPath — env var edge cases', () => {
 });
 
 describe('vaultsRoot — env var edge cases', () => {
-  let origEnv;
+  let origEnv: NodeJS.ProcessEnv;
   beforeEach(() => { origEnv = { ...process.env }; });
   afterEach(() => { process.env = origEnv; });
 
@@ -111,8 +111,8 @@ describe('vaultsRoot — env var edge cases', () => {
 });
 
 describe('findTool', () => {
-  let tmp;
-  let origEnv;
+  let tmp: string;
+  let origEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
     origEnv = { ...process.env };
