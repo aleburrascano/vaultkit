@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(join(__dirname, '../package.json'), 'utf8'));
+const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8')) as { version: string };
 
-function auditLog(command, args, exitCode, start) {
+function auditLog(command: string, args: string[], exitCode: number, start: number): void {
   const logFile = process.env.VAULTKIT_LOG;
   if (!logFile) return;
   const duration = Date.now() - start;
@@ -15,15 +15,16 @@ function auditLog(command, args, exitCode, start) {
   try { appendFileSync(logFile, line); } catch { /* ignore */ }
 }
 
-async function wrap(fn, commandName, args) {
+async function wrap(fn: () => Promise<void>, commandName: string, args: string[]): Promise<void> {
   const start = Date.now();
   try {
     await fn();
     auditLog(commandName, args, 0, start);
   } catch (err) {
     auditLog(commandName, args, 1, start);
-    if (err?.message) {
-      process.stderr.write(`Error: ${err.message}\n`);
+    const message = (err as { message?: string })?.message;
+    if (message) {
+      process.stderr.write(`Error: ${message}\n`);
     }
     process.exit(1);
   }
@@ -39,7 +40,7 @@ program
 program
   .command('init <name>')
   .description('Create a new vault from scratch')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/init.js');
       await run(name);
@@ -49,7 +50,7 @@ program
 program
   .command('connect <input>')
   .description('Clone an existing vault and register it as MCP server')
-  .action(async (input) => {
+  .action(async (input: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/connect.js');
       await run(input);
@@ -59,7 +60,7 @@ program
 program
   .command('disconnect <name>')
   .description('Remove vault locally and from MCP (keeps GitHub repo)')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/disconnect.js');
       await run(name);
@@ -69,7 +70,7 @@ program
 program
   .command('destroy <name>')
   .description('Delete vault locally, on GitHub, and from MCP')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/destroy.js');
       await run(name);
@@ -89,7 +90,7 @@ program
 program
   .command('update <name>')
   .description('Refresh launcher and restore missing layout files')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/update.js');
       await run(name);
@@ -110,7 +111,7 @@ program
 program
   .command('verify <name>')
   .description('Inspect launcher SHA-256 and re-pin if needed')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/verify.js');
       await run(name);
@@ -120,7 +121,7 @@ program
 program
   .command('status [name]')
   .description('Show vault registry + git state')
-  .action(async (name) => {
+  .action(async (name: string | undefined) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/status.js');
       await run(name);
@@ -130,7 +131,7 @@ program
 program
   .command('backup <name>')
   .description('Snapshot a vault to a local zip')
-  .action(async (name) => {
+  .action(async (name: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/backup.js');
       await run(name);
@@ -140,7 +141,7 @@ program
 program
   .command('visibility <name> <mode>')
   .description('Toggle public / private / auth-gated')
-  .action(async (name, mode) => {
+  .action(async (name: string, mode: string) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/visibility.js');
       await run(name, mode);

@@ -9,16 +9,13 @@
     "url": "https://github.com/aleburrascano/vaultkit/issues"
   },
   "bin": {
-    "vaultkit": "bin/vaultkit.js"
+    "vaultkit": "dist/bin/vaultkit.js"
   },
   "files": [
-    "bin/vaultkit.js",
-    "src/",
-    "lib/mcp-start.js.tmpl",
-    "lib/deploy.yml.tmpl"
+    "dist/"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/post-build.mjs",
     "check": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
