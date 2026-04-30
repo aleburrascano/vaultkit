@@ -6,16 +6,26 @@ import { validateName, isVaultLike } from '../lib/vault.js';
 import { getVaultDir, removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
+import type { RunOptions } from '../types.js';
 
-async function resolveRepoSlug(dir) {
-  const result = await execa('git', ['-C', dir, 'remote', 'get-url', 'origin'], { reject: false });
-  if (result.exitCode !== 0) return null;
-  const url = result.stdout.trim();
-  const m = url.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?\/?$/);
-  return m ? m[1] : null;
+export interface DestroyOptions extends RunOptions {
+  skipConfirm?: boolean;
+  skipMcp?: boolean;
+  confirmName?: string;
 }
 
-export async function run(name, { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = console.log } = {}) {
+async function resolveRepoSlug(dir: string): Promise<string | null> {
+  const result = await execa('git', ['-C', dir, 'remote', 'get-url', 'origin'], { reject: false });
+  if (result.exitCode !== 0) return null;
+  const url = String(result.stdout ?? '').trim();
+  const m = url.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?\/?$/);
+  return m?.[1] ?? null;
+}
+
+export async function run(
+  name: string,
+  { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = console.log }: DestroyOptions = {},
+): Promise<void> {
   validateName(name);
 
   const dir = await getVaultDir(name, cfgPath);
@@ -28,7 +38,7 @@ export async function run(name, { cfgPath, skipConfirm = false, skipMcp = false,
   }
 
   // Resolve GitHub repo
-  let repoSlug = existsSync(join(dir, '.git')) ? await resolveRepoSlug(dir) : null;
+  const repoSlug = existsSync(join(dir, '.git')) ? await resolveRepoSlug(dir) : null;
   let repoDeletable = false;
   let repoNote = '';
 
@@ -62,7 +72,7 @@ export async function run(name, { cfgPath, skipConfirm = false, skipMcp = false,
 
   const status = { github: 'skipped', mcp: 'skipped', local: 'skipped' };
 
-  if (repoDeletable) {
+  if (repoDeletable && repoSlug) {
     log('Deleting GitHub repo...');
     const gh = await findTool('gh');
     if (gh) {

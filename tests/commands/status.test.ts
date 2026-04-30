@@ -301,7 +301,6 @@ describe.skipIf(!LIVE)('live: status reports real vault state', { timeout: 60_00
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    // @ts-expect-error destroy.js's options type also incomplete under JS inference until phase 5
     await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
   }, 60_000);
 

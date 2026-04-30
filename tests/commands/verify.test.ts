@@ -254,7 +254,6 @@ describe.skipIf(!LIVE)('live: verify checks real launcher hash', { timeout: 60_0
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    // @ts-expect-error destroy.js options incomplete under JS inference until phase 5
     await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
   }, 60_000);
 

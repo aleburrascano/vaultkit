@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-let tmp;
+let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-destroy-test-')); });
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
 
-function writeCfg(cfgPath, vaults) {
-  const mcpServers = {};
+function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
+  const mcpServers: Record<string, { command: string; args: string[] }> = {};
   for (const [name, dir] of Object.entries(vaults)) {
     mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
   }
@@ -47,7 +47,6 @@ describe('destroy command', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
     const { run } = await import('../../src/commands/destroy.js');
     await run('MyVault', { cfgPath, skipConfirm: true, skipMcp: true });
-    const { existsSync } = await import('node:fs');
     expect(existsSync(vaultDir)).toBe(false);
   });
 });
@@ -60,6 +59,7 @@ const LIVE_VAULT = `vk-live-destroy-${Date.now()}`;
 describe.skipIf(!LIVE)('live: destroy removes real GitHub repo', { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const { run } = await import('../../src/commands/init.js');
+    // @ts-expect-error TS infers only default-valued options from init.js — phase 5 init.ts migration restores the full type.
     await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
   });
 

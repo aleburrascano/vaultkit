@@ -5,15 +5,15 @@ import { tmpdir } from 'node:os';
 
 vi.mock('@inquirer/prompts', () => ({ input: vi.fn(), confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('execa')>();
   return { ...real, execa: vi.fn() };
 });
 vi.mock('../../src/lib/platform.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/platform.js')>();
   return { ...real, findTool: vi.fn() };
 });
 vi.mock('../../src/lib/github.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/github.js')>();
   return { ...real, isAdmin: vi.fn(), ensureDeleteRepoScope: vi.fn() };
 });
 
@@ -22,7 +22,7 @@ import { execa } from 'execa';
 import { findTool } from '../../src/lib/platform.js';
 import { isAdmin, ensureDeleteRepoScope } from '../../src/lib/github.js';
 
-let tmp;
+let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'vk-destroy-mock-'));
@@ -37,15 +37,15 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function writeCfg(cfgPath, vaults) {
-  const mcpServers = {};
+function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
+  const mcpServers: Record<string, { command: string; args: string[] }> = {};
   for (const [name, dir] of Object.entries(vaults)) {
     mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
   }
   writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
 }
 
-function makeVaultDir(dir, withGit = false) {
+function makeVaultDir(dir: string, withGit: boolean = false): void {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'CLAUDE.md'), '');
   mkdirSync(join(dir, 'raw'), { recursive: true });
@@ -53,13 +53,13 @@ function makeVaultDir(dir, withGit = false) {
   if (withGit) mkdirSync(join(dir, '.git'), { recursive: true });
 }
 
-function mockGitRemote(url) {
-  vi.mocked(execa).mockImplementation(async (cmd, args) => {
+function mockGitRemote(url: string): void {
+  vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
     if (args?.[2] === 'remote' && args?.[3] === 'get-url') {
       return { exitCode: 0, stdout: url, stderr: '' };
     }
     return { exitCode: 0, stdout: '', stderr: '' };
-  });
+  }) as never);
 }
 
 // ── DE-1: non-admin collaborator — GitHub deletion skipped ───────────────────
@@ -78,8 +78,8 @@ describe('DE-1: non-admin user', () => {
     vi.mocked(input).mockResolvedValueOnce('CollabVault');
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('CollabVault', { cfgPath, skipMcp: true, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('CollabVault', { cfgPath, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /don't own|skipping/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(false);
@@ -101,8 +101,8 @@ describe('DE-2: admin user, wrong name typed', () => {
     vi.mocked(input).mockResolvedValueOnce('wrongname');
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('AdminVault', { cfgPath, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('AdminVault', { cfgPath, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /aborted/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(true);
@@ -121,26 +121,27 @@ describe('DE-3: admin user confirms deletion', () => {
     vi.mocked(isAdmin).mockResolvedValueOnce(true);
     vi.mocked(ensureDeleteRepoScope).mockResolvedValue(undefined);
     vi.mocked(input).mockResolvedValueOnce('DeleteVault');
-    vi.mocked(findTool).mockImplementation(async (name) => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
       if (name === 'gh') return '/usr/bin/gh';
       if (name === 'claude') return null;
       return null;
     });
     // mock all execa calls including git remote and gh repo delete
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
       if (args?.[2] === 'remote' && args?.[3] === 'get-url') {
         return { exitCode: 0, stdout: 'https://github.com/me/DeleteVault.git', stderr: '' };
       }
       return { exitCode: 0, stdout: '', stderr: '' };
-    });
+    }) as never);
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('DeleteVault', { cfgPath, skipMcp: true, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('DeleteVault', { cfgPath, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
 
-    const deleteCalls = vi.mocked(execa).mock.calls.filter(c =>
-      c[1]?.includes('delete') && c[1]?.includes('--yes')
-    );
+    const deleteCalls = vi.mocked(execa).mock.calls.filter(c => {
+      const args = c[1] as unknown;
+      return Array.isArray(args) && args.includes('delete') && args.includes('--yes');
+    });
     expect(deleteCalls.length).toBeGreaterThan(0);
     expect(existsSync(vaultDir)).toBe(false);
   });
@@ -157,11 +158,11 @@ describe('DE-4: GitHub deletion fails', () => {
 
     vi.mocked(isAdmin).mockResolvedValueOnce(true);
     vi.mocked(ensureDeleteRepoScope).mockResolvedValue(undefined);
-    vi.mocked(findTool).mockImplementation(async (name) => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
       if (name === 'gh') return '/usr/bin/gh';
       return null;
     });
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
       if (args?.[2] === 'remote' && args?.[3] === 'get-url') {
         return { exitCode: 0, stdout: 'https://github.com/me/PartialVault.git', stderr: '' };
       }
@@ -169,11 +170,11 @@ describe('DE-4: GitHub deletion fails', () => {
         return { exitCode: 1, stdout: '', stderr: 'permission denied' };
       }
       return { exitCode: 0, stdout: '', stderr: '' };
-    });
+    }) as never);
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('PartialVault', { cfgPath, skipConfirm: true, skipMcp: true, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('PartialVault', { cfgPath, skipConfirm: true, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /GitHub repo deletion failed|continuing/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(false);
@@ -191,11 +192,11 @@ describe('DE-5: MCP removal skipped', () => {
 
     vi.mocked(isAdmin).mockRejectedValueOnce(new Error('no git'));
     vi.mocked(findTool).mockResolvedValue(null);
-    vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+    vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' } as never);
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('NoMcpVault', { cfgPath, skipConfirm: true, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('NoMcpVault', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /Claude Code not found|MCP cleanup skipped/i.test(l))).toBe(true);
   });
@@ -212,11 +213,11 @@ describe('DE-6: summary output', () => {
 
     vi.mocked(isAdmin).mockRejectedValueOnce(new Error('no git'));
     vi.mocked(findTool).mockResolvedValue(null);
-    vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' });
+    vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: '' } as never);
 
     const { run } = await import('../../src/commands/destroy.js');
-    const lines = [];
-    await run('SummaryVault', { cfgPath, skipConfirm: true, log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('SummaryVault', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /Summary/i.test(l))).toBe(true);
     expect(lines.some(l => /GitHub/i.test(l))).toBe(true);
