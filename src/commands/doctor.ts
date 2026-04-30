@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
 import { Vault } from '../lib/vault.js';
 import { findTool, claudeJsonPath } from '../lib/platform.js';
-import type { ClaudeConfig, LogFn, RunOptions } from '../types.js';
+import type { ClaudeConfig, CommandModule, LogFn, RunOptions } from '../types.js';
 
 async function checkTool(name: string, required: boolean, log: LogFn): Promise<boolean> {
   const path = await findTool(name);
@@ -141,3 +141,7 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
 
   return issues;
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[], RunOptions, number> = { run };
+void _module;

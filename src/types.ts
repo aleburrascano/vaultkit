@@ -34,6 +34,34 @@ export interface RunOptions {
   log?: LogFn;
 }
 
+/**
+ * The contract every src/commands/<name>.ts module satisfies. Each command
+ * file exports an `async function run(...)` whose shape matches this
+ * interface; declaring a `_module: CommandModule<...> = { run }` sentinel
+ * at the bottom of each command file type-checks the contract at compile
+ * time so a future command can't drift from the lifecycle without the
+ * type checker noticing.
+ *
+ * Three type parameters cover the variance across commands:
+ *  - `TParams`: a tuple of positional arguments — `[string]` for the
+ *    name-taking commands, `[]` for the no-arg `pull` and `doctor`,
+ *    `[string, string]` for `visibility`.
+ *  - `TOptions`: the per-command options interface (extends `RunOptions`).
+ *  - `TResult`: the return value (`void` for most, `number` for `doctor`,
+ *    `string` for `backup`).
+ *
+ * The variadic shape `[...TParams, opts?: TOptions]` packs positional
+ * params with the trailing optional-options arg into a single rest tuple,
+ * so the same interface fits all three signature shapes.
+ */
+export interface CommandModule<
+  TParams extends unknown[] = [],
+  TOptions extends RunOptions = RunOptions,
+  TResult = void,
+> {
+  run(...args: [...TParams, opts?: TOptions]): Promise<TResult>;
+}
+
 // ─── Git operation results (src/lib/git) ────────────────────────────────
 
 export interface GitPushResult {

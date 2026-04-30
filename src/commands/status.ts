@@ -4,7 +4,7 @@ import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
 import { getStatus } from '../lib/git.js';
 import { Vault } from '../lib/vault.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export async function run(
   name: string | undefined,
@@ -59,3 +59,7 @@ export async function run(
     log('');
   }
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string | undefined], RunOptions, void> = { run };
+void _module;

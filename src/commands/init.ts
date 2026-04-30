@@ -10,7 +10,7 @@ import {
 } from '../lib/vault-templates.js';
 import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
-import type { LogFn, RunOptions } from '../types.js';
+import type { CommandModule, LogFn, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
@@ -293,3 +293,7 @@ export async function run(
     throw err;
   }
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], InitOptions, void> = { run };
+void _module;

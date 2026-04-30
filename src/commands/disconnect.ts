@@ -4,7 +4,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export interface DisconnectOptions extends RunOptions {
   skipConfirm?: boolean;
@@ -65,3 +65,7 @@ export async function run(
   log(`Done. ${name} disconnected.`);
   log(`Reconnect anytime with: vaultkit connect <owner/${name}>`);
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], DisconnectOptions, void> = { run };
+void _module;

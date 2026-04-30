@@ -4,7 +4,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { archiveZip } from '../lib/git.js';
 import { vaultsRoot } from '../lib/platform.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export interface BackupOptions extends RunOptions {
   backupsDir?: string;
@@ -46,3 +46,7 @@ export async function run(
 
   return zipPath;
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], BackupOptions, string> = { run };
+void _module;

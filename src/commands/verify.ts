@@ -3,7 +3,7 @@ import { execa } from 'execa';
 import { Vault, sha256 } from '../lib/vault.js';
 import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export interface VerifyOptions extends RunOptions {
   yes?: boolean;
@@ -96,3 +96,7 @@ export async function run(
   log('');
   log('Done. Restart Claude Code to apply the new pin.');
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], VerifyOptions, void> = { run };
+void _module;

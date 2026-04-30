@@ -5,7 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export interface DestroyOptions extends RunOptions {
   skipConfirm?: boolean;
@@ -111,3 +111,7 @@ export async function run(
   log(`  MCP:    ${status.mcp}`);
   log(`  Local:  ${status.local}`);
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], DestroyOptions, void> = { run };
+void _module;

@@ -11,7 +11,7 @@ import {
   getVisibility, isAdmin, getUserPlan,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
 } from '../lib/github.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
@@ -176,3 +176,7 @@ export async function run(
 
   log(`\nhttps://github.com/${repoSlug}`);
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string, string], VisibilityOptions, void> = { run };
+void _module;

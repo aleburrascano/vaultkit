@@ -6,7 +6,7 @@ import { addToRegistry } from '../lib/registry.js';
 import { findTool, vaultsRoot } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
 import { clone } from '../lib/git.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export interface ConnectOptions extends RunOptions {
   skipMcp?: boolean;
@@ -127,3 +127,7 @@ export async function run(
     }
   }
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], ConnectOptions, void> = { run };
+void _module;

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { getAllVaults } from '../lib/registry.js';
 import { pull } from '../lib/git.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 export async function run({ cfgPath, log = console.log }: RunOptions = {}): Promise<void> {
   const vaults = await getAllVaults(cfgPath);
@@ -44,3 +44,7 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
 
   log(`\n${synced} vault(s) synced, ${skipped} skipped`);
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[], RunOptions, void> = { run };
+void _module;

@@ -11,7 +11,7 @@ import {
 import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
-import type { RunOptions } from '../types.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
@@ -167,3 +167,7 @@ export async function run(
     log(`Done. Changes will take effect after the PR (branch: ${pushResult.branch}) is merged.`);
   }
 }
+
+// Compile-time check: `run` matches the CommandModule contract.
+const _module: CommandModule<[string], UpdateOptions, void> = { run };
+void _module;
