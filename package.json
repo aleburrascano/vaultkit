@@ -1,6 +1,6 @@
 {
   "name": "@aleburrascano/vaultkit",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "type": "module",
   "description": "Obsidian wiki management — create, connect, and destroy vaults with GitHub Pages and Claude Code MCP.",
   "author": "Alessandro Burrascano <aleburrascano123@gmail.com>",
@@ -20,6 +20,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:live": "cross-env VAULTKIT_LIVE_TEST=1 vitest run",
     "check": "node --check bin/vaultkit.js"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "execa": "^9.5.2"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "vitest": "^4.1.5"
   },
   "keywords": [
