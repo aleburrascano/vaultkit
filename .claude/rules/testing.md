@@ -1,18 +1,21 @@
 # Testing Rules
 
-Test runner: `npm test` (runs vitest in single-pass mode)
+Test runner: `npm test` (runs vitest in single-pass mode against the TypeScript source directly — no build needed for tests).
 Watch mode: `npm run test:watch`
+Live (real GitHub API): `npm run test:live` — gated behind `VAULTKIT_LIVE_TEST=1`, runs sequentially to avoid `~/.claude.json` write races.
 
 Test files live in `tests/` and mirror the source tree:
-- `tests/lib/` — unit tests for `src/lib/*.js` modules
-- `tests/commands/` — integration tests for `src/commands/*.js`
+- `tests/lib/` — unit tests for `src/lib/*.ts` modules
+- `tests/commands/` — integration tests for `src/commands/*.ts`. Many commands have both `<name>.test.ts` (real-world integration) and `<name>-mocked.test.ts` (vi.mock-based unit tests).
 
 ## Testing discipline
 
 - After any file edit: run `npm test` before committing.
-- Syntax errors in `bin/vaultkit.js` are caught by `npm run check` (`node --check`).
-- Template files (`.tmpl`) must parse as valid JavaScript — verified by the check script.
+- Type errors are caught by `npm run check` (`tsc --noEmit`). Run before committing on any TS change.
+- Template files (`.tmpl`) are validated by their consumers — `mcp-start.js.tmpl` must parse as valid JavaScript when executed by the spawned Node process.
 - Use vitest's built-in mocking (`vi.mock`, `vi.spyOn`) for external dependencies (git, gh, fs).
+- For typed mocks, prefer `await importOriginal<typeof import('module')>()` so the `...real` spread is typed.
+- For `vi.mocked(execa).mockImplementation(...)` and `mockResolvedValue(...)`, use `(async (...) => ({...})) as never` to satisfy execa's overloaded Result type.
 
 ## Sacred tests rule
 

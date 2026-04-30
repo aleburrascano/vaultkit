@@ -256,7 +256,7 @@ The Pages API call failed (often due to a brand-new repo where Pages isn't immed
 
 ## Contributing to vaultkit
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). The repo is intentionally small — Node.js dispatcher + bash scripts, zero npm dependencies, no build step.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). The repo is intentionally small — TypeScript source under `bin/`, `src/`, and `tests/`, compiled to `dist/` at publish time. Three runtime dependencies (`commander`, `execa`, `@inquirer/prompts`) plus `typescript` and `vitest` for development.
 
 ## License
 

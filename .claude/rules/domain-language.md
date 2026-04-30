@@ -4,10 +4,12 @@
 - **vault name** = user-chosen identifier matching `^[a-zA-Z0-9_-]+$`, max 64 chars; used as the key in the MCP registry.
 - **vault dir** = the full filesystem path to a vault on disk; always resolved via the MCP registry, never from user input.
 - **MCP registry** = the `mcpServers` object in `~/.claude.json`, where each vault is registered with its path and expected SHA-256 hash.
-- **launcher** = `.mcp-start.js` in each vault root; sources the `lib/mcp-start.js.tmpl` template, pinned to a SHA-256 hash for self-verification.
-- **GitHub Pages** = static site hosting integrated via `vault-visibility.sh` and deploy templates for publishing `raw/` and `wiki/` branches.
-- **dispatch** = the flow `vaultkit <cmd>` → `bin/vaultkit.js` (COMMANDS lookup) → `vault-<cmd>.sh` script.
-- **script** = a `vault-*.sh` bash file that implements a single command; always sources `lib/_helpers.sh`.
-- **helper** = a shared bash function in `lib/_helpers.sh` used by all scripts (e.g., `vk_resolve_vault_dir`, `vk_to_posix`).
+- **launcher** = `.mcp-start.js` in each vault root; bytes copied verbatim from `lib/mcp-start.js.tmpl`, pinned to a SHA-256 hash for self-verification.
+- **launcher template** = `lib/mcp-start.js.tmpl` — the single source of truth for the launcher. Stays as raw JS (not migrated to TS) because every user vault byte-pins its SHA-256.
+- **GitHub Pages** = static site hosting integrated via `src/commands/visibility.ts` and `lib/deploy.yml.tmpl` for publishing `raw/` and `wiki/` content.
+- **dispatch** = the flow `vaultkit <cmd>` → `bin/vaultkit.ts` (commander) → `src/commands/<cmd>.ts`. The published package ships compiled `dist/bin/vaultkit.js` → `dist/src/commands/<cmd>.js`.
+- **command module** = a `src/commands/<name>.ts` file that exports `async function run(params, options?: <Name>Options): Promise<...>`. Per-command `<Name>Options` interfaces extend `RunOptions` from `src/types.ts`.
+- **lib module** = a `src/lib/<name>.ts` file shared by command modules. Current libs: `registry`, `vault`, `platform`, `git`, `github`.
+- **Vault class** = the rich object form of a registered vault, defined in `src/lib/vault.ts`. Wraps name + dir + expectedHash and exposes disk/path checks (`existsOnDisk`, `isVaultLike`, `hasGitRepo`, `hasLauncher`, `sha256OfLauncher`). Construct via `Vault.tryFromName(name, cfgPath?)` or `Vault.fromRecord(record)`.
 
 Run `/common-ground` at the start of each session to surface assumptions about this domain.

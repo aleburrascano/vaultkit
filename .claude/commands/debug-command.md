@@ -5,18 +5,23 @@ description: Debug a vaultkit command for issues
 
 Help me debug the vaultkit command "$ARGUMENTS".
 
-1. Read `vault-$ARGUMENTS.sh` in full.
+1. Read `src/commands/$ARGUMENTS.ts` in full. Read its test files at `tests/commands/$ARGUMENTS.test.ts` and `tests/commands/$ARGUMENTS-mocked.test.ts` (if it exists).
 2. Check for these common issues:
-   - Missing `set -euo pipefail` or missing `. "$SCRIPT_DIR/lib/_helpers.sh"`
-   - Unhandled / un-validated arguments — should call `vk_validate_vault_name` for vault names
-   - Vault path resolution uses `vk_resolve_vault_dir` (MCP registry), not raw user input or filesystem fallbacks for destructive ops
-   - Windows paths converted via `vk_to_posix` / `vk_to_windows` (not raw `cygpath`)
-   - MCP registration includes `--expected-sha256=<hash>` (re-check after `claude mcp add` calls)
-   - `gh` or `claude` calls that assume the binary is on PATH — `vault-init.sh` shows the probe pattern for first-time `gh` discovery
-   - Vault structure check (`vk_is_vault_like`) before any `rm -rf`
-3. Show how to run the script directly for isolated testing:
+   - Vault name not validated — should use `Vault.tryFromName(name, cfgPath)` (which calls `validateName` internally) or `validateName(name)` directly from `src/lib/vault.ts`.
+   - Vault path resolution uses `Vault.tryFromName` or `getVaultDir` (MCP registry), not raw user input or filesystem fallbacks for destructive ops.
+   - Windows: paths via `path.join`/`path.dirname`; PATH lookup via `findTool` (`src/lib/platform.ts`), not bare `gh`/`claude` assumptions.
+   - MCP registration includes `--expected-sha256=<hash>` (re-check after `claude mcp add` calls).
+   - `gh` or `claude` calls that assume the binary is on PATH — `init.ts` shows the probe pattern for first-time `gh` discovery.
+   - Vault structure check (`Vault.isVaultLike()` or `isVaultLike(dir)`) before any `rm -rf` (`rmSync({ recursive: true, force: true })`).
+   - execa stdout/stderr accesses use `String(result.stdout ?? '').trim()` (execa's wide stdout type).
+3. Show how to run the command directly for isolated testing:
    ```bash
-   bash vault-$ARGUMENTS.sh [typical-args]
+   npm run build
+   node dist/bin/vaultkit.js $ARGUMENTS [typical-args]
    ```
-4. If `npm link` is not active, remind me to run `npm link` so I don't need to publish.
+   Or run the targeted tests:
+   ```bash
+   npx vitest run tests/commands/$ARGUMENTS.test.ts
+   ```
+4. If `npm link` is not active, remind me to run `npm run build && npm link` so I don't need to publish.
 5. Report findings as a concise list: what's fine, what might be the issue.
