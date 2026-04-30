@@ -14,15 +14,15 @@ import { tmpdir } from 'node:os';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('execa')>();
   return { ...real, execa: vi.fn() };
 });
 vi.mock('../../src/lib/platform.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/platform.js')>();
   return { ...real, findTool: vi.fn(), vaultsRoot: vi.fn(), npmGlobalBin: vi.fn() };
 });
 vi.mock('../../src/lib/git.js', async (importOriginal) => {
-  const real = await importOriginal();
+  const real = await importOriginal<typeof import('../../src/lib/git.js')>();
   return { ...real, clone: vi.fn() };
 });
 
@@ -32,7 +32,7 @@ import { findTool, vaultsRoot } from '../../src/lib/platform.js';
 import { clone } from '../../src/lib/git.js';
 import { _normalizeInput } from '../../src/commands/connect.js';
 
-let tmp;
+let tmp: string;
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'vk-connect-test-'));
@@ -44,7 +44,7 @@ beforeEach(() => {
 
   vi.mocked(vaultsRoot).mockReturnValue(tmp);
   vi.mocked(findTool).mockResolvedValue('/usr/bin/claude');
-  vi.mocked(execa).mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
+  vi.mocked(execa).mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' } as never);
 });
 
 afterEach(() => {
@@ -107,8 +107,8 @@ describe('TR-2: clone succeeds, launcher missing', () => {
     });
 
     const { run } = await import('../../src/commands/connect.js');
-    const lines = [];
-    await run('owner/NoLauncher', { cfgPath: join(tmp, '.claude.json'), log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('owner/NoLauncher', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
 
     // Warning logged, vault dir left intact (user cloned a vault without launcher)
     expect(lines.some(l => /missing .mcp-start.js|MCP registration skipped/i.test(l))).toBe(true);
@@ -131,12 +131,15 @@ describe('TR-3: user declines MCP registration', () => {
     vi.mocked(confirm).mockResolvedValueOnce(false);
 
     const { run } = await import('../../src/commands/connect.js');
-    const lines = [];
-    await run('owner/DeclineVault', { cfgPath: join(tmp, '.claude.json'), log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('owner/DeclineVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
 
     expect(lines.some(l => /skipped|To register later/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(true);
-    expect(vi.mocked(execa).mock.calls.some(c => c[1]?.includes('add'))).toBe(false);
+    expect(vi.mocked(execa).mock.calls.some(c => {
+      const args = c[1] as unknown;
+      return Array.isArray(args) && args.includes('add');
+    })).toBe(false);
   });
 });
 
@@ -154,17 +157,17 @@ describe('TR-4: MCP registration fails — partial clone removed', () => {
     });
     vi.mocked(confirm).mockResolvedValueOnce(true); // user confirms MCP registration
 
-    vi.mocked(execa).mockImplementation(async (cmd, args) => {
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
       if (args?.includes('add') && args?.includes('--scope')) {
         throw new Error('claude mcp add: permission denied');
       }
       return { exitCode: 0, stdout: '', stderr: '' };
-    });
+    }) as never);
 
     const { run } = await import('../../src/commands/connect.js');
-    const lines = [];
+    const lines: string[] = [];
     await expect(
-      run('owner/McpFailVault', { cfgPath: join(tmp, '.claude.json'), log: (m) => lines.push(m) })
+      run('owner/McpFailVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) })
     ).rejects.toThrow(/permission denied/i);
 
     expect(lines.some(l => /partial clone|Connect failed/i.test(l))).toBe(true);
@@ -185,16 +188,17 @@ describe('TR-5: successful connect', () => {
       mkdirSync(join(vaultDir, 'wiki'), { recursive: true });
     });
     vi.mocked(confirm).mockResolvedValueOnce(true);
-    vi.mocked(execa).mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' });
+    vi.mocked(execa).mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' } as never);
 
     const { run } = await import('../../src/commands/connect.js');
-    const lines = [];
-    await run('owner/SuccessVault', { cfgPath: join(tmp, '.claude.json'), log: (m) => lines.push(m) });
+    const lines: string[] = [];
+    await run('owner/SuccessVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
 
     expect(existsSync(vaultDir)).toBe(true);
-    const addCalls = vi.mocked(execa).mock.calls.filter(c =>
-      c[1]?.includes('add') && c[1]?.some(a => String(a).includes('expected-sha256'))
-    );
+    const addCalls = vi.mocked(execa).mock.calls.filter(c => {
+      const args = c[1] as unknown;
+      return Array.isArray(args) && args.includes('add') && args.some((a: unknown) => String(a).includes('expected-sha256'));
+    });
     expect(addCalls.length).toBeGreaterThan(0);
     expect(lines.some(l => /done/i.test(l))).toBe(true);
   });
@@ -206,15 +210,15 @@ const LIVE = !!process.env.VAULTKIT_LIVE_TEST;
 const LIVE_VAULT = `vk-live-connect-${Date.now()}`;
 
 describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_000 }, () => {
-  let repoSlug;
+  let repoSlug = '';
 
   async function restoreReal() {
-    const { execa: realExeca } = await vi.importActual('execa');
-    vi.mocked(execa).mockImplementation(realExeca);
-    const realPlatform = await vi.importActual('../../src/lib/platform.js');
+    const { execa: realExeca } = await vi.importActual<typeof import('execa')>('execa');
+    vi.mocked(execa).mockImplementation(realExeca as never);
+    const realPlatform = await vi.importActual<typeof import('../../src/lib/platform.js')>('../../src/lib/platform.js');
     vi.mocked(findTool).mockImplementation(realPlatform.findTool);
     vi.mocked(vaultsRoot).mockImplementation(realPlatform.vaultsRoot);
-    const realGit = await vi.importActual('../../src/lib/git.js');
+    const realGit = await vi.importActual<typeof import('../../src/lib/git.js')>('../../src/lib/git.js');
     vi.mocked(clone).mockImplementation(realGit.clone);
   }
 
@@ -224,6 +228,7 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
     await restoreReal();
     // Create a vault (creates the GitHub repo)
     const { run: initRun } = await import('../../src/commands/init.js');
+    // @ts-expect-error TS infers only default-valued options from init.js — phase 5.11 init.ts migration restores the full type.
     await initRun(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
 
     // Get the repo slug for later use
@@ -247,8 +252,8 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
     }
     // Delete GitHub repo
     const { repoExists } = await import('../../src/lib/github.js');
-    const { execa: realExeca } = await vi.importActual('execa');
-    const { findTool: realFindTool } = await vi.importActual('../../src/lib/platform.js');
+    const { execa: realExeca } = await vi.importActual<typeof import('execa')>('execa');
+    const { findTool: realFindTool } = await vi.importActual<typeof import('../../src/lib/platform.js')>('../../src/lib/platform.js');
     if (repoSlug && await repoExists(repoSlug).catch(() => false)) {
       const gh = await realFindTool('gh');
       if (gh) await realExeca(gh, ['repo', 'delete', repoSlug, '--yes'], { reject: false });
@@ -263,7 +268,6 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
     const dir = await getVaultDir(LIVE_VAULT);
     expect(dir).toBeTruthy();
 
-    const { existsSync } = await import('node:fs');
-    expect(existsSync(dir)).toBe(true);
+    expect(existsSync(dir as string)).toBe(true);
   });
 });

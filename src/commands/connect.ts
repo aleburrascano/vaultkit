@@ -6,16 +6,21 @@ import { validateName, sha256, isVaultLike } from '../lib/vault.js';
 import { getVaultDir, addToRegistry } from '../lib/registry.js';
 import { findTool, vaultsRoot, npmGlobalBin } from '../lib/platform.js';
 import { clone } from '../lib/git.js';
+import type { RunOptions } from '../types.js';
 
-export function _normalizeInput(input) {
-  if (/^https:\/\/github\.com\/([^/]+\/[^/.]+)(\.git)?(\/.*)?$/.test(input)) {
-    const m = input.match(/^https:\/\/github\.com\/([^/]+\/[^/.]+?)(\.git)?(\/.*)?$/);
-    const repo = m[1];
+export interface ConnectOptions extends RunOptions {
+  skipMcp?: boolean;
+}
+
+export function _normalizeInput(input: string): { repo: string; name: string } {
+  const httpsM = input.match(/^https:\/\/github\.com\/([^/]+\/[^/.]+?)(\.git)?(\/.*)?$/);
+  if (httpsM) {
+    const repo = httpsM[1] ?? '';
     return { repo, name: basename(repo) };
   }
-  if (/^git@github\.com:([^/]+\/[^/.]+)(\.git)?$/.test(input)) {
-    const m = input.match(/^git@github\.com:([^/]+\/[^/.]+?)(\.git)?$/);
-    const repo = m[1];
+  const sshM = input.match(/^git@github\.com:([^/]+\/[^/.]+?)(\.git)?$/);
+  if (sshM) {
+    const repo = sshM[1] ?? '';
     return { repo, name: basename(repo) };
   }
   if (/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(input)) {
@@ -24,7 +29,10 @@ export function _normalizeInput(input) {
   throw new Error(`Unrecognized format. Use owner/repo or a GitHub URL.`);
 }
 
-export async function run(input, { cfgPath, skipMcp = false, log = console.log } = {}) {
+export async function run(
+  input: string,
+  { cfgPath, skipMcp = false, log = console.log }: ConnectOptions = {},
+): Promise<void> {
   const { repo, name } = _normalizeInput(input);
   validateName(name);
 
