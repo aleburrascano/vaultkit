@@ -3,11 +3,11 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { confirm, input, select } from '@inquirer/prompts';
 import { execa } from 'execa';
+import { validateName, sha256 } from '../lib/vault.js';
 import {
-  validateName, sha256,
   renderClaudeMd, renderReadme, renderDuplicateCheckYaml,
   renderVaultJson, renderGitignore, renderGitattributes, renderIndexMd, renderLogMd,
-} from '../lib/vault.js';
+} from '../lib/vault-templates.js';
 import { findTool, vaultsRoot, npmGlobalBin, isWindows } from '../lib/platform.js';
 import type { LogFn, RunOptions } from '../types.js';
 

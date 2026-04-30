@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { validateName, isVaultLike, sha256 } from '../../src/lib/vault.js';
 import {
-  validateName,
-  isVaultLike,
-  sha256,
   renderClaudeMd,
   renderReadme,
   renderDuplicateCheckYaml,
@@ -14,7 +12,7 @@ import {
   renderGitattributes,
   renderIndexMd,
   renderLogMd,
-} from '../../src/lib/vault.js';
+} from '../../src/lib/vault-templates.js';
 
 let tmp: string;
 beforeEach(() => {

@@ -3,7 +3,8 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
-import { Vault, renderVaultJson } from '../lib/vault.js';
+import { Vault } from '../lib/vault.js';
+import { renderVaultJson } from '../lib/vault-templates.js';
 import { findTool } from '../lib/platform.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import {
