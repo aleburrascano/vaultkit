@@ -1,12 +1,14 @@
 # Contributing to vaultkit
 
-Thanks for your interest. vaultkit is intentionally small — a Node.js dispatcher (`bin/vaultkit.js`) plus a set of bash scripts (`vault-*.sh`) — with **zero npm dependencies** and **no build step**. Repo files are published files. Keep contributions in that spirit.
+Thanks for your interest. vaultkit is intentionally small — a TypeScript codebase under [`bin/`](./bin/), [`src/`](./src/), and [`tests/`](./tests/) that compiles to `dist/` at publish time. Three runtime dependencies (`commander`, `execa`, `@inquirer/prompts`); ESM only; Node ≥22. Keep contributions in that spirit: minimal deps, no framework lock-in, every commit independently shippable.
 
 ## Local setup
 
 ```bash
 git clone https://github.com/aleburrascano/vaultkit
 cd vaultkit
+npm install         # installs deps (incl. dev)
+npm run build       # tsc + post-build (copies lib/*.tmpl into dist/lib/)
 npm link            # makes the `vaultkit` binary point at this checkout
 vaultkit doctor     # sanity check
 ```
@@ -17,72 +19,83 @@ When you're done:
 npm unlink -g @aleburrascano/vaultkit
 ```
 
-Edits to any `.sh` or `bin/vaultkit.js` are live immediately — no reinstall.
+After editing `.ts` source, run `npm run build` again — `npm link` points at `dist/bin/vaultkit.js`, so the binary picks up changes only after a rebuild. (`npm test` runs vitest directly against TypeScript source, so tests don't need a build.)
 
 ## Repo layout
 
 ```
-bin/vaultkit.js        Node.js dispatcher — routes vaultkit <cmd> to vault-<cmd>.sh
-vault-*.sh             One bash script per command
-lib/_helpers.sh        Shared bash functions — every vault-*.sh sources this
-lib/mcp-start.js.tmpl  Single source of truth for the per-vault MCP launcher
-.claude/commands/      Claude Code slash commands for development workflows
-CLAUDE.md              Internal architecture notes (security invariants, command map)
+bin/vaultkit.ts         Entry point — commander dispatch + audit logging
+src/commands/<cmd>.ts   One module per command, exports async function run()
+src/lib/                Shared modules: registry, vault, platform, git, github
+src/types.ts            Shared type definitions (RunOptions, ClaudeConfig, …)
+lib/mcp-start.js.tmpl   Per-vault MCP launcher template (byte-immutable)
+lib/deploy.yml.tmpl     GitHub Actions workflow for Quartz deployment
+tests/                  vitest tests, mirrors src/ structure
+scripts/post-build.mjs  Copies lib/*.tmpl into dist/lib/ after tsc
+.claude/commands/       Slash commands for development workflows
+.claude/rules/          Architecture, security, and style references
+CLAUDE.md               Top-level project guidance for Claude Code sessions
 ```
 
-Read [CLAUDE.md](./CLAUDE.md) before changing anything — it documents the security invariants and Windows-compatibility patterns that every script must follow.
+Read [.claude/rules/architecture.md](./.claude/rules/architecture.md) and [.claude/rules/security-invariants.md](./.claude/rules/security-invariants.md) before changing anything — they document the invariants every command must respect.
 
 ## Adding a new command
 
 The repo ships a `/add-command` slash command for Claude Code that scaffolds the boilerplate. Manually:
 
-1. Create `vault-<name>.sh` at the repo root. Source `lib/_helpers.sh` near the top:
-   ```bash
-   #!/usr/bin/env bash
-   set -euo pipefail
-   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-   . "$SCRIPT_DIR/lib/_helpers.sh"
-   ```
-2. Add a row to the `COMMANDS` map in `bin/vaultkit.js`.
-3. Add `"vault-<name>.sh"` to the `files` array in `package.json`.
-4. Add a row to the help text in both `bin/vaultkit.js` and `README.md`.
+1. Create `src/commands/<name>.ts`. Export `async function run(params, options?: <Name>Options): Promise<...>` where `<Name>Options extends RunOptions` adds command-specific fields.
+2. Add `.command('<name> ...')` to the `program` in [bin/vaultkit.ts](./bin/vaultkit.ts) with a dynamic `import('../src/commands/<name>.js')` inside `wrap()`. (The `.js` specifier is correct in TS source — Node ESM's `NodeNext` resolution maps it to the `.ts` file at compile time.)
+3. Add a row to README.md and the help text in `bin/vaultkit.ts`.
+4. Add an entry under `## [Unreleased]` in CHANGELOG.md.
+5. Add `tests/commands/<name>.test.ts` covering happy path + key error cases. For commands with non-trivial branching, also add `tests/commands/<name>-mocked.test.ts` for unit-level coverage.
+
+`package.json#files` is `["dist/"]` and `bin` is `"dist/bin/vaultkit.js"` — no change needed for new commands.
 
 ## Security invariants
 
-These are non-negotiable. Every PR is checked against them:
+These are non-negotiable. Every PR is checked against them — see [.claude/rules/security-invariants.md](./.claude/rules/security-invariants.md):
 
-- **Vault names** must match `^[a-zA-Z0-9_-]+$` and be ≤64 chars. Use `vk_validate_vault_name` from `lib/_helpers.sh`.
-- **Vault paths** for destructive operations must come from the MCP registry (`vk_resolve_vault_dir`), never from raw user input or filesystem fallbacks.
-- **MCP registration** must include `--expected-sha256=<hash>` so the launcher can self-verify on every session start.
-- **`gh repo delete`** must be preceded by an explicit ownership check (`gh api repos/.../permissions.admin`) and a typed-name confirmation.
-- **`.obsidian/` or `CLAUDE.md` + `raw/` + `wiki/`** must be present before any `rm -rf` (use `vk_is_vault_like`).
+- **Vault names** must match `^[a-zA-Z0-9_-]+$` and be ≤64 chars. Use `validateName` from [src/lib/vault.ts](./src/lib/vault.ts) — also enforced internally by `Vault.tryFromName`.
+- **Vault paths** for destructive ops must come from the MCP registry (`Vault.tryFromName` or `getVaultDir` from [src/lib/registry.ts](./src/lib/registry.ts)), never from raw user input or filesystem fallbacks.
+- **MCP registration** must include `--expected-sha256=<hash>` so the launcher can self-verify on every Claude Code session.
+- **`gh repo delete`** must be preceded by an explicit ownership check (`isAdmin` from [src/lib/github.ts](./src/lib/github.ts)) and a typed-name confirmation.
+- **`isVaultLike`** must be checked before any directory deletion — use `Vault.isVaultLike()` or the standalone helper from `src/lib/vault.ts`.
 
 ## Windows compatibility
 
-Every script must work in Git Bash on Windows. Specifically:
+Every command must work on Windows. Specifically:
 
-- Path conversion: use `vk_to_posix` and `vk_to_windows`. Don't hardcode `cygpath` calls.
-- `gh` and `claude` may be installed but not visible to a running shell because Windows PATH changes on install don't reach already-running processes. `vault-init.sh` and `bin/vaultkit.js` show the probe pattern — never assume tools are on PATH.
-- Test your changes by running them in Git Bash on Windows if you can. If you can't, mention that in the PR.
+- Use `findTool` from [src/lib/platform.ts](./src/lib/platform.ts) — never assume `gh` or `claude` are on PATH (Windows PATH changes on install don't reach already-running processes).
+- Use `isWindows`, `claudeJsonPath`, `vaultsRoot` for OS-specific path resolution.
+- Use `execa` (already a dependency) for external process calls — it handles Windows shell quoting correctly.
+- Test on Windows if you can. If you can't, mention that in the PR.
 
 ## Running checks
 
-The same checks that run in CI:
+The same checks that run in CI ([.github/workflows/ci.yml](./.github/workflows/ci.yml)):
 
 ```bash
-shellcheck -x vault-*.sh install.sh        # bash linter
-node --check bin/vaultkit.js                # JS syntax check
-node --check lib/mcp-start.js.tmpl          # launcher syntax check
-npm publish --dry-run                       # verify the package contents
+npm run check                # tsc --noEmit (type-only verification)
+npm run build                # tsc + copy templates into dist/lib/
+npm test                     # vitest run (unit + integration)
+npm publish --dry-run        # verify dist/ contains the published files
 ```
+
+For the live test suite (real GitHub API + ~/.claude.json mutations), gated behind an env var:
+
+```bash
+npm run test:live            # cross-env VAULTKIT_LIVE_TEST=1 vitest run
+```
+
+Live tests run sequentially to avoid `~/.claude.json` write races and create ephemeral test repos that they clean up.
 
 ## Pull requests
 
-- Keep changes focused. One logical change per PR.
+- Keep changes focused. One logical change per PR; one logical concern per commit. Every commit should leave the world intact (`check`, `build`, `test` all green) — see CLAUDE.md for the change-cadence rule.
 - Update `CHANGELOG.md` under `## [Unreleased]` with what you changed and why.
-- Don't add npm dependencies. Use Node.js built-ins (inline `node -e` is fine) or shell utilities only.
-- Don't add a build step.
-- The PR will run CI automatically — make sure shellcheck, syntax checks, and the publish dry-run pass.
+- Keep new npm dependencies minimal — justify any additions in the PR description.
+- Don't edit [lib/mcp-start.js.tmpl](./lib/mcp-start.js.tmpl) casually; existing user vaults pin its SHA-256 and a byte change breaks all their registrations.
+- The PR will run CI automatically — make sure type-check, build, tests, and the publish dry-run all pass.
 
 ## Reporting bugs
 

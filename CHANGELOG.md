@@ -4,6 +4,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Changed
+- **CONTRIBUTING.md** rewritten to match the post-2.0.3 TypeScript reality. The previous version still described the pre-migration shell-script architecture (`vault-*.sh`, `lib/_helpers.sh`, "zero npm dependencies", "no build step") and would have led new contributors to write code that doesn't compile or get loaded.
+
 ## [2.0.3] - 2026-04-30
 
 ### Changed
