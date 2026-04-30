@@ -3,8 +3,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
-import { validateName, renderVaultJson } from '../lib/vault.js';
-import { getVaultDir } from '../lib/registry.js';
+import { Vault, renderVaultJson } from '../lib/vault.js';
 import { findTool } from '../lib/platform.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import {
@@ -33,20 +32,18 @@ export async function run(
   target: string,
   { cfgPath, log = console.log, skipConfirm = false }: VisibilityOptions = {},
 ): Promise<void> {
-  validateName(name);
-
   const validTargets = ['public', 'private', 'auth-gated'];
   if (!validTargets.includes(target)) {
     throw new Error(`Invalid mode '${target}'. Choose one of: public, private, auth-gated.`);
   }
 
-  const dir = await getVaultDir(name, cfgPath);
-  if (!dir) throw new Error(`"${name}" is not a registered vault.`);
+  const vault = await Vault.tryFromName(name, cfgPath);
+  if (!vault) throw new Error(`"${name}" is not a registered vault.`);
 
   const gh = await findTool('gh');
   if (!gh) throw new Error('GitHub CLI (gh) is required for vaultkit visibility.');
 
-  const repoSlug = await resolveRepoSlug(dir);
+  const repoSlug = await resolveRepoSlug(vault.dir);
   if (!repoSlug) throw new Error("Vault has no 'origin' remote — cannot determine GitHub repo.");
 
   const admin = await isAdmin(repoSlug).catch(() => false);
@@ -68,7 +65,7 @@ export async function run(
     }
   }
 
-  const hasDeploy = existsSync(join(dir, '.github', 'workflows', 'deploy.yml'));
+  const hasDeploy = existsSync(join(vault.dir, '.github', 'workflows', 'deploy.yml'));
   const needDeploy = (target === 'public' || target === 'auth-gated') && !hasDeploy;
 
   // Build action plan
@@ -112,12 +109,12 @@ export async function run(
 
   if (needDeploy) {
     log('Adding deploy workflow...');
-    const wfDir = join(dir, '.github', 'workflows');
+    const wfDir = join(vault.dir, '.github', 'workflows');
     mkdirSync(wfDir, { recursive: true });
     copyFileSync(DEPLOY_TMPL, join(wfDir, 'deploy.yml'));
 
     const [owner = '', repo = ''] = repoSlug.split('/');
-    writeFileSync(join(dir, '_vault.json'), renderVaultJson(owner, repo));
+    writeFileSync(join(vault.dir, '_vault.json'), renderVaultJson(owner, repo));
     workflowAdded = true;
   }
 
@@ -164,9 +161,9 @@ export async function run(
 
   if (workflowAdded) {
     const filesToStage = ['.github/workflows/deploy.yml', '_vault.json'];
-    await add(dir, filesToStage);
-    await commit(dir, 'chore: add Pages deploy workflow');
-    const pushResult = await pushOrPr(dir, {
+    await add(vault.dir, filesToStage);
+    await commit(vault.dir, 'chore: add Pages deploy workflow');
+    const pushResult = await pushOrPr(vault.dir, {
       branchPrefix: 'vaultkit-pages',
       prTitle: 'chore: add Pages deploy workflow',
       prBody: 'Adds GitHub Pages deploy workflow.',

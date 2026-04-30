@@ -4,11 +4,10 @@ import { fileURLToPath } from 'node:url';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import {
-  validateName, sha256,
+  Vault, sha256,
   renderClaudeMd, renderReadme, renderDuplicateCheckYaml,
   renderGitignore, renderGitattributes, renderIndexMd, renderLogMd,
 } from '../lib/vault.js';
-import { getVaultDir } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import type { RunOptions } from '../types.js';
@@ -28,36 +27,33 @@ export async function run(
   name: string,
   { cfgPath, log = console.log, skipConfirm = false }: UpdateOptions = {},
 ): Promise<void> {
-  validateName(name);
+  const vault = await Vault.tryFromName(name, cfgPath);
+  if (!vault) throw new Error(`"${name}" is not a registered vault.`);
 
-  const dir = await getVaultDir(name, cfgPath);
-  if (!dir) throw new Error(`"${name}" is not a registered vault.`);
-
-  if (!existsSync(join(dir, '.git'))) {
-    throw new Error(`${dir} is not a git repository — aborting.`);
+  if (!vault.hasGitRepo()) {
+    throw new Error(`${vault.dir} is not a git repository — aborting.`);
   }
 
-  log(`Updating ${name} at ${dir}...`);
+  log(`Updating ${name} at ${vault.dir}...`);
 
   // Launcher refresh detection
-  const launcherPath = join(dir, '.mcp-start.js');
-  const beforeHash = existsSync(launcherPath) ? await sha256(launcherPath) : '';
+  const beforeHash = vault.hasLauncher() ? await vault.sha256OfLauncher() : '';
   const tmplHash = await sha256(TMPL_PATH);
   const launcherWillChange = beforeHash !== tmplHash;
 
   // Layout-repair detection
   const missing: string[] = [];
-  if (!existsSync(join(dir, 'CLAUDE.md'))) missing.push('CLAUDE.md');
-  if (!existsSync(join(dir, 'README.md'))) missing.push('README.md');
-  if (!existsSync(join(dir, 'index.md'))) missing.push('index.md');
-  if (!existsSync(join(dir, 'log.md'))) missing.push('log.md');
-  if (!existsSync(join(dir, '.gitignore'))) missing.push('.gitignore');
-  if (!existsSync(join(dir, '.gitattributes'))) missing.push('.gitattributes');
-  if (!existsSync(join(dir, '.github', 'workflows', 'duplicate-check.yml')))
+  if (!existsSync(join(vault.dir, 'CLAUDE.md'))) missing.push('CLAUDE.md');
+  if (!existsSync(join(vault.dir, 'README.md'))) missing.push('README.md');
+  if (!existsSync(join(vault.dir, 'index.md'))) missing.push('index.md');
+  if (!existsSync(join(vault.dir, 'log.md'))) missing.push('log.md');
+  if (!existsSync(join(vault.dir, '.gitignore'))) missing.push('.gitignore');
+  if (!existsSync(join(vault.dir, '.gitattributes'))) missing.push('.gitattributes');
+  if (!existsSync(join(vault.dir, '.github', 'workflows', 'duplicate-check.yml')))
     missing.push('.github/workflows/duplicate-check.yml');
-  if (!existsSync(join(dir, 'raw')) || isDirEmpty(join(dir, 'raw')))
+  if (!existsSync(join(vault.dir, 'raw')) || isDirEmpty(join(vault.dir, 'raw')))
     missing.push('raw/.gitkeep');
-  if (!existsSync(join(dir, 'wiki')) || isDirEmpty(join(dir, 'wiki')))
+  if (!existsSync(join(vault.dir, 'wiki')) || isDirEmpty(join(vault.dir, 'wiki')))
     missing.push('wiki/.gitkeep');
 
   // Summary
@@ -87,13 +83,13 @@ export async function run(
   }
 
   // Apply: copy launcher
-  copyFileSync(TMPL_PATH, launcherPath);
-  const afterHash = await sha256(launcherPath);
+  copyFileSync(TMPL_PATH, vault.launcherPath);
+  const afterHash = await vault.sha256OfLauncher();
 
   // Apply: create missing layout files
   const added: string[] = [];
   for (const f of missing) {
-    const target = join(dir, f);
+    const target = join(vault.dir, f);
     mkdirSync(dirname(target), { recursive: true });
     switch (f) {
       case 'CLAUDE.md': writeFileSync(target, renderClaudeMd(name)); break;
@@ -117,14 +113,14 @@ export async function run(
     await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
     await execa(claudePath, [
       'mcp', 'add', '--scope', 'user',
-      name, '--', 'node', launcherPath,
+      name, '--', 'node', vault.launcherPath,
       `--expected-sha256=${afterHash}`,
     ]);
   } else {
     log('Warning: Claude Code not found — MCP re-registration skipped.');
     log(`  Once installed, run:`);
     log(`    claude mcp remove ${name} --scope user`);
-    log(`    claude mcp add --scope user ${name} -- node "${launcherPath}" --expected-sha256=${afterHash}`);
+    log(`    claude mcp add --scope user ${name} -- node "${vault.launcherPath}" --expected-sha256=${afterHash}`);
   }
 
   const launcherChanged = afterHash !== beforeHash;
@@ -140,9 +136,9 @@ export async function run(
   if (launcherChanged) filesToStage.push('.mcp-start.js');
   filesToStage.push(...added);
 
-  await add(dir, filesToStage);
+  await add(vault.dir, filesToStage);
 
-  const stagedResult = await execa('git', ['-C', dir, 'diff', '--cached', '--name-only'], { reject: false });
+  const stagedResult = await execa('git', ['-C', vault.dir, 'diff', '--cached', '--name-only'], { reject: false });
   const staged = String(stagedResult.stdout ?? '').trim();
   if (!staged) {
     log('  Nothing staged — skipping commit.');
@@ -159,10 +155,10 @@ export async function run(
     commitMsg = 'chore: restore standard vaultkit layout files';
   }
 
-  await commit(dir, commitMsg);
+  await commit(vault.dir, commitMsg);
   log('');
 
-  const pushResult = await pushOrPr(dir, {
+  const pushResult = await pushOrPr(vault.dir, {
     branchPrefix: 'vaultkit-update',
     prTitle: commitMsg,
     prBody: 'Brings the vault up to the current vaultkit standard.',

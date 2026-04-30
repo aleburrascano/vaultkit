@@ -1,8 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
-import { sha256, isVaultLike } from '../lib/vault.js';
+import { Vault } from '../lib/vault.js';
 import { findTool, claudeJsonPath } from '../lib/platform.js';
 import type { ClaudeConfig, LogFn, RunOptions } from '../types.js';
 
@@ -74,58 +73,58 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
   log('');
 
   // Vault health
-  const vaults = await getAllVaults(cfgPath);
-  if (vaults.length === 0) {
+  const records = await getAllVaults(cfgPath);
+  if (records.length === 0) {
     log('No vaults registered.');
   } else {
     log('Vaults:');
-    for (const vault of vaults) {
-      if (!existsSync(vault.dir)) {
+    for (const record of records) {
+      const vault = Vault.fromRecord(record);
+      if (!vault.existsOnDisk()) {
         log(`  x fail  ${vault.name}: directory missing (${vault.dir})`);
         log(`    Hint: vaultkit connect ${vault.name}`);
         issues++;
         continue;
       }
 
-      const launcherPath = join(vault.dir, '.mcp-start.js');
-      if (!existsSync(launcherPath)) {
+      if (!vault.hasLauncher()) {
         log(`  ! warn  ${vault.name}: .mcp-start.js missing`);
         log(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
-      const onDiskHash = await sha256(launcherPath);
+      const onDiskHash = await vault.sha256OfLauncher();
 
-      if (!vault.hash) {
+      if (!vault.expectedHash) {
         log(`  ! warn  ${vault.name}: no pinned hash (legacy registration)`);
         log(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
-      if (vault.hash !== onDiskHash) {
+      if (vault.expectedHash !== onDiskHash) {
         log(`  x fail  ${vault.name}: hash mismatch`);
-        log(`    Pinned:  ${vault.hash}`);
+        log(`    Pinned:  ${vault.expectedHash}`);
         log(`    On-disk: ${onDiskHash}`);
         log(`    Hint: vaultkit verify ${vault.name}`);
         issues++;
         continue;
       }
 
-      if (!isVaultLike(vault.dir)) {
+      if (!vault.isVaultLike()) {
         log(`  ! warn  ${vault.name}: vault layout incomplete`);
         log(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
       log(`  + ok   ${vault.name} (${vault.dir})`);
-      log(`         ${vault.hash}`);
+      log(`         ${vault.expectedHash}`);
     }
 
     // Count non-vault MCP servers
     try {
       const cfg = JSON.parse(readFileSync(cfgPath ?? claudeJsonPath(), 'utf8')) as ClaudeConfig;
       const allServers = Object.keys(cfg?.mcpServers ?? {});
-      const vaultNames = new Set(vaults.map(v => v.name));
+      const vaultNames = new Set(records.map(v => v.name));
       const others = allServers.filter(n => !vaultNames.has(n));
       if (others.length > 0) {
         log(`\n  Other MCP servers (not managed by vaultkit): ${others.join(', ')}`);

@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { execa } from 'execa';
-import { getAllVaults, getVaultDir } from '../lib/registry.js';
+import { getAllVaults } from '../lib/registry.js';
 import { getStatus } from '../lib/git.js';
-import { validateName } from '../lib/vault.js';
+import { Vault } from '../lib/vault.js';
 import type { RunOptions } from '../types.js';
 
 export async function run(
@@ -12,17 +12,16 @@ export async function run(
 ): Promise<void> {
   if (name) {
     // Single-vault detailed mode
-    validateName(name);
-    const dir = await getVaultDir(name, cfgPath);
-    if (!dir) {
+    const vault = await Vault.tryFromName(name, cfgPath);
+    if (!vault) {
       throw new Error(`Vault "${name}" is not registered.`);
     }
-    if (!existsSync(join(dir, '.git'))) {
-      throw new Error(`${dir} is not a git repository.`);
+    if (!vault.hasGitRepo()) {
+      throw new Error(`${vault.dir} is not a git repository.`);
     }
     log(`${name}`);
-    log(`  Path: ${dir}`);
-    const result = await execa('git', ['-C', dir, 'status'], { reject: false });
+    log(`  Path: ${vault.dir}`);
+    const result = await execa('git', ['-C', vault.dir, 'status'], { reject: false });
     log(String(result.stdout ?? ''));
     return;
   }

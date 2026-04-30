@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { getVaultDir, getExpectedHash } from './registry.js';
+import type { VaultRecord } from '../types.js';
 
 export function validateName(name: string): void {
   if (name.includes('/')) {
@@ -166,4 +168,62 @@ export function renderIndexMd(): string {
 export function renderLogMd(): string {
   return `# Log
 `;
+}
+
+/**
+ * Snapshot view of a registered vault. Holds name + dir + expectedHash and
+ * exposes the disk/path checks commands repeatedly need. Construct via
+ * `Vault.tryFromName(name, cfgPath?)` to look up by name (returns null if
+ * unregistered) or `Vault.fromRecord(record)` from a registry iteration.
+ *
+ * Vault is a snapshot — fields are readonly. If the registry changes after
+ * construction, callers must re-create the Vault to see the new state.
+ */
+export class Vault {
+  readonly name: string;
+  readonly dir: string;
+  readonly expectedHash: string | null;
+
+  private constructor(name: string, dir: string, expectedHash: string | null) {
+    this.name = name;
+    this.dir = dir;
+    this.expectedHash = expectedHash;
+  }
+
+  /** Throws if the name is invalid; returns null if the name isn't registered. */
+  static async tryFromName(name: string, cfgPath?: string): Promise<Vault | null> {
+    validateName(name);
+    const dir = await getVaultDir(name, cfgPath);
+    if (!dir) return null;
+    const hash = await getExpectedHash(name, cfgPath);
+    return new Vault(name, dir, hash);
+  }
+
+  static fromRecord(record: VaultRecord): Vault {
+    return new Vault(record.name, record.dir, record.hash);
+  }
+
+  get launcherPath(): string {
+    return join(this.dir, '.mcp-start.js');
+  }
+
+  existsOnDisk(): boolean {
+    return existsSync(this.dir);
+  }
+
+  isVaultLike(): boolean {
+    return isVaultLike(this.dir);
+  }
+
+  hasGitRepo(): boolean {
+    return existsSync(join(this.dir, '.git'));
+  }
+
+  hasLauncher(): boolean {
+    return existsSync(this.launcherPath);
+  }
+
+  async sha256OfLauncher(): Promise<string> {
+    return sha256(this.launcherPath);
+  }
 }

@@ -1,9 +1,6 @@
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
-import { validateName, sha256 } from '../lib/vault.js';
-import { getVaultDir, getExpectedHash } from '../lib/registry.js';
+import { Vault, sha256 } from '../lib/vault.js';
 import { findTool } from '../lib/platform.js';
 import type { RunOptions } from '../types.js';
 
@@ -15,21 +12,18 @@ export async function run(
   name: string,
   { cfgPath, yes = false, log = console.log }: VerifyOptions = {},
 ): Promise<void> {
-  validateName(name);
+  const vault = await Vault.tryFromName(name, cfgPath);
+  if (!vault) throw new Error(`"${name}" is not a registered vault.`);
 
-  const dir = await getVaultDir(name, cfgPath);
-  if (!dir) throw new Error(`"${name}" is not a registered vault.`);
-
-  const launcherPath = join(dir, '.mcp-start.js');
-  if (!existsSync(launcherPath)) {
-    throw new Error(`${launcherPath} does not exist.\n  Run 'vaultkit update ${name}' to install the launcher.`);
+  if (!vault.hasLauncher()) {
+    throw new Error(`${vault.launcherPath} does not exist.\n  Run 'vaultkit update ${name}' to install the launcher.`);
   }
 
-  const pinned = await getExpectedHash(name, cfgPath) ?? '';
-  const onDisk = await sha256(launcherPath);
+  const pinned = vault.expectedHash ?? '';
+  const onDisk = await vault.sha256OfLauncher();
 
-  log(`Vault:    ${name}`);
-  log(`Path:     ${dir}`);
+  log(`Vault:    ${vault.name}`);
+  log(`Path:     ${vault.dir}`);
   log('');
   log(`Pinned SHA-256:  ${pinned || '(none registered)'}`);
   log(`On-disk SHA-256: ${onDisk}`);
@@ -37,19 +31,19 @@ export async function run(
 
   // Check for upstream drift
   let upstreamDrift = false;
-  if (existsSync(join(dir, '.git'))) {
-    await execa('git', ['-C', dir, 'fetch', '--quiet'], { reject: false });
-    const hasUpstream = (await execa('git', ['-C', dir, 'rev-parse', '@{u}'], { reject: false })).exitCode === 0;
+  if (vault.hasGitRepo()) {
+    await execa('git', ['-C', vault.dir, 'fetch', '--quiet'], { reject: false });
+    const hasUpstream = (await execa('git', ['-C', vault.dir, 'rev-parse', '@{u}'], { reject: false })).exitCode === 0;
     if (hasUpstream) {
       const diffResult = await execa('git', [
-        '-C', dir, 'diff', '--name-only', 'HEAD..@{u}', '--', '.mcp-start.js',
+        '-C', vault.dir, 'diff', '--name-only', 'HEAD..@{u}', '--', '.mcp-start.js',
       ], { reject: false });
       const diffFiles = String(diffResult.stdout ?? '').trim();
       if (diffFiles === '.mcp-start.js') {
         upstreamDrift = true;
         log('Upstream has a different .mcp-start.js — diff:');
         log('----------------------------------------');
-        const diffOut = await execa('git', ['-C', dir, '--no-pager', 'diff', 'HEAD..@{u}', '--', '.mcp-start.js'], { reject: false });
+        const diffOut = await execa('git', ['-C', vault.dir, '--no-pager', 'diff', 'HEAD..@{u}', '--', '.mcp-start.js'], { reject: false });
         log(String(diffOut.stdout ?? ''));
         log('----------------------------------------');
         log('');
@@ -71,16 +65,16 @@ export async function run(
     log('');
     const ok = yes || await confirm({ message: 'Pull upstream and re-pin?', default: false });
     if (!ok) { log('Aborted.'); return; }
-    const pullResult = await execa('git', ['-C', dir, 'pull', '--ff-only', '--quiet'], { reject: false });
+    const pullResult = await execa('git', ['-C', vault.dir, 'pull', '--ff-only', '--quiet'], { reject: false });
     if (pullResult.exitCode !== 0) {
       throw new Error(`git pull failed. Resolve manually and re-run vaultkit verify ${name}.`);
     }
-    finalHash = await sha256(launcherPath);
+    finalHash = await sha256(vault.launcherPath);
     log(`  Pulled. New on-disk SHA-256: ${finalHash}`);
   } else {
     log('On-disk launcher does not match the pinned hash.');
     log('Inspect the file before trusting it:');
-    log(`  cat "${launcherPath}"`);
+    log(`  cat "${vault.launcherPath}"`);
     log('');
     const ok = yes || await confirm({ message: `Re-pin the on-disk SHA-256 (${onDisk})?`, default: false });
     if (!ok) { log('Aborted.'); return; }
@@ -90,7 +84,7 @@ export async function run(
   if (!claudePath) {
     log('Warning: Claude Code not found — re-pin manually:');
     log(`  claude mcp remove ${name} --scope user`);
-    log(`  claude mcp add --scope user ${name} -- node "${launcherPath}" --expected-sha256=${finalHash}`);
+    log(`  claude mcp add --scope user ${name} -- node "${vault.launcherPath}" --expected-sha256=${finalHash}`);
     throw new Error('Claude Code not found.');
   }
 
@@ -98,7 +92,7 @@ export async function run(
   await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
   await execa(claudePath, [
     'mcp', 'add', '--scope', 'user',
-    name, '--', 'node', launcherPath,
+    name, '--', 'node', vault.launcherPath,
     `--expected-sha256=${finalHash}`,
   ]);
 

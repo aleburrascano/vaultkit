@@ -1,8 +1,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { execa } from 'execa';
-import { validateName } from '../lib/vault.js';
-import { getVaultDir } from '../lib/registry.js';
+import { Vault } from '../lib/vault.js';
 import { archiveZip } from '../lib/git.js';
 import { vaultsRoot } from '../lib/platform.js';
 import type { RunOptions } from '../types.js';
@@ -15,19 +14,17 @@ export async function run(
   name: string,
   { cfgPath, backupsDir, log = console.log }: BackupOptions = {},
 ): Promise<string> {
-  validateName(name);
+  const vault = await Vault.tryFromName(name, cfgPath);
+  if (!vault) throw new Error(`Vault "${name}" is not registered.`);
 
-  const dir = await getVaultDir(name, cfgPath);
-  if (!dir) throw new Error(`Vault "${name}" is not registered.`);
-
-  if (!existsSync(join(dir, '.git'))) {
-    throw new Error(`${dir} is not a git repository.`);
+  if (!vault.hasGitRepo()) {
+    throw new Error(`${vault.dir} is not a git repository.`);
   }
 
-  const statusResult = await execa('git', ['-C', dir, 'status', '--porcelain'], { reject: false });
+  const statusResult = await execa('git', ['-C', vault.dir, 'status', '--porcelain'], { reject: false });
   if (String(statusResult.stdout ?? '').trim().length > 0) {
     log(`Warning: Vault has uncommitted changes — they will NOT be in the backup.`);
-    log(`  Hint: cd "${dir}" && git add . && git commit -m "wip: pre-backup snapshot"`);
+    log(`  Hint: cd "${vault.dir}" && git add . && git commit -m "wip: pre-backup snapshot"`);
   }
 
   const resolvedBackupsDir = backupsDir ?? join(vaultsRoot(), '.backups');
@@ -37,7 +34,7 @@ export async function run(
     .replace(/T/, '-').replace(/:/g, '').replace(/\..+/, '');
   const zipPath = join(resolvedBackupsDir, `${name}-${timestamp}.zip`);
 
-  await archiveZip(dir, zipPath);
+  await archiveZip(vault.dir, zipPath);
 
   if (!existsSync(zipPath)) {
     throw new Error(`Backup file was not created at ${zipPath}`);

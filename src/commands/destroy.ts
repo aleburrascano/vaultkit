@@ -1,9 +1,8 @@
-import { existsSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { rmSync } from 'node:fs';
 import { input } from '@inquirer/prompts';
 import { execa } from 'execa';
-import { validateName, isVaultLike } from '../lib/vault.js';
-import { getVaultDir, removeFromRegistry } from '../lib/registry.js';
+import { Vault } from '../lib/vault.js';
+import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
 import type { RunOptions } from '../types.js';
@@ -26,19 +25,17 @@ export async function run(
   name: string,
   { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = console.log }: DestroyOptions = {},
 ): Promise<void> {
-  validateName(name);
-
-  const dir = await getVaultDir(name, cfgPath);
-  if (!dir) {
+  const vault = await Vault.tryFromName(name, cfgPath);
+  if (!vault) {
     throw new Error(`"${name}" is not a registered vault.\nRun 'vaultkit status' to see what's registered.\nIf you have an orphaned directory, remove it manually.`);
   }
 
-  if (existsSync(dir) && !isVaultLike(dir)) {
-    throw new Error(`${dir} does not look like an Obsidian vault — aborting.`);
+  if (vault.existsOnDisk() && !vault.isVaultLike()) {
+    throw new Error(`${vault.dir} does not look like an Obsidian vault — aborting.`);
   }
 
   // Resolve GitHub repo
-  const repoSlug = existsSync(join(dir, '.git')) ? await resolveRepoSlug(dir) : null;
+  const repoSlug = vault.hasGitRepo() ? await resolveRepoSlug(vault.dir) : null;
   let repoDeletable = false;
   let repoNote = '';
 
@@ -57,7 +54,7 @@ export async function run(
   if (!skipConfirm) {
     log('');
     log('This will permanently delete:');
-    log(`  Local:  ${dir}${existsSync(dir) ? '' : ' (not found — will skip)'}`);
+    log(`  Local:  ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
     if (repoDeletable) {
       log(`  GitHub: https://github.com/${repoSlug}`);
     } else if (repoNote) {
@@ -100,9 +97,9 @@ export async function run(
     }
   }
 
-  if (existsSync(dir)) {
+  if (vault.existsOnDisk()) {
     log('Deleting local vault...');
-    rmSync(dir, { recursive: true, force: true });
+    rmSync(vault.dir, { recursive: true, force: true });
     status.local = 'deleted';
   } else {
     log('Local directory not found — skipping.');
