@@ -68,11 +68,11 @@ Every command must work on Windows. Specifically:
 - Use `findTool` from [src/lib/platform.ts](./src/lib/platform.ts) — never assume `gh` or `claude` are on PATH (Windows PATH changes on install don't reach already-running processes).
 - Use `isWindows`, `claudeJsonPath`, `vaultsRoot` for OS-specific path resolution.
 - Use `execa` (already a dependency) for external process calls — it handles Windows shell quoting correctly.
-- Test on Windows if you can. If you can't, mention that in the PR.
+- CI runs the full check/build/test gauntlet on both `ubuntu-latest` and `windows-latest` ([`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) with `fail-fast: false`, so platform-specific regressions surface on the PR. You don't need a Windows machine to contribute, but if a CI run fails only on Windows the fix typically lives in `src/lib/platform.ts` or in a path-separator assumption inside a test.
 
 ## Running checks
 
-The same checks that run in CI ([.github/workflows/ci.yml](./.github/workflows/ci.yml)):
+The same checks that run in CI ([.github/workflows/ci.yml](./.github/workflows/ci.yml)) on both `ubuntu-latest` and `windows-latest`:
 
 ```bash
 npm run check                # tsc --noEmit (type-only verification)

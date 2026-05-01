@@ -4,6 +4,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### CI
+- **Windows added to the CI matrix.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) now runs `check`/`build`/`test`/`npm publish --dry-run` on both `ubuntu-latest` and `windows-latest` with `fail-fast: false`. Closes the gap where vaultkit's explicit Windows code paths in [`src/lib/platform.ts`](src/lib/platform.ts) and [`src/lib/installGhForPlatform`](src/lib/platform.ts) were never exercised in CI. CONTRIBUTING.md updated to reflect the dual-OS gate.
+
 ### Refactor
 - **`visibility.ts` planner/executor decomposition.** The original implementation duplicated the same three-mode (`public` / `private` / `auth-gated`) branch structure twice — once in the plan-building block (English strings appended to `actions: string[]`) and once in the apply block (imperative `await ...` calls). Adding a fourth mode required editing both. The new shape is a typed discriminated union (`VisibilityAction`), a pure planner (`_buildVisibilityPlan(state) → VisibilityAction[]`), a `describeAction(action) → string` for the user-facing plan output, and a single `executeAction(action, ctx)` switch. Each atomic operation (`setRepoVisibility`, `enablePages`, `disablePages`, `setPagesVisibility`, `addDeployWorkflow`) lives in exactly one place; the compiler enforces switch exhaustiveness. Behavior preserved end-to-end — all 13 existing `visibility.test.ts` cases pass unchanged. Auth-gated "enable Pages with private visibility" now logs as two atomic steps (more accurate plan output).
 
