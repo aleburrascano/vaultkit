@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { getVaultDir, getExpectedHash } from './registry.js';
-import { VaultkitError } from './errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from './errors.js';
 import { VAULT_FILES, VAULT_DIRS, VAULT_CONSTRAINTS } from './constants.js';
 import type { VaultRecord } from '../types.js';
 
@@ -64,6 +64,23 @@ export class Vault {
     if (!dir) return null;
     const hash = await getExpectedHash(name, cfgPath);
     return new Vault(name, dir, hash);
+  }
+
+  /**
+   * Like {@link tryFromName} but throws `VaultkitError('NOT_REGISTERED', …)`
+   * when the name isn't in the registry. Use this in commands that have no
+   * meaningful 'unregistered' code path — they all share the canonical
+   * `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}` phrasing this way.
+   */
+  static async requireFromName(name: string, cfgPath?: string): Promise<Vault> {
+    const vault = await Vault.tryFromName(name, cfgPath);
+    if (!vault) {
+      throw new VaultkitError(
+        'NOT_REGISTERED',
+        `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`,
+      );
+    }
+    return vault;
   }
 
   static fromRecord(record: VaultRecord): Vault {

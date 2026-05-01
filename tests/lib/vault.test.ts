@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { validateName, isVaultLike, sha256 } from '../../src/lib/vault.js';
+import { Vault, validateName, isVaultLike, sha256 } from '../../src/lib/vault.js';
+import { isVaultkitError } from '../../src/lib/errors.js';
 import {
   renderClaudeMd,
   renderReadme,
@@ -60,6 +61,53 @@ describe('validateName', () => {
 
   it('slash check takes precedence over char check', () => {
     expect(() => validateName('owner/repo')).toThrow('not owner/repo');
+  });
+});
+
+// ── Vault.requireFromName ─────────────────────────────────────────────────────
+
+describe('Vault.requireFromName', () => {
+  function writeCfg(servers: Record<string, { command: string; args: unknown[] }>): string {
+    const cfgPath = join(tmp, '.claude.json');
+    writeFileSync(cfgPath, JSON.stringify({ mcpServers: servers }), 'utf8');
+    return cfgPath;
+  }
+
+  it('returns a Vault when the name is registered', async () => {
+    const cfgPath = writeCfg({
+      MyVault: { command: 'node', args: [join(tmp, 'MyVault', '.mcp-start.js'), '--expected-sha256=abc123'] },
+    });
+    const vault = await Vault.requireFromName('MyVault', cfgPath);
+    expect(vault.name).toBe('MyVault');
+    expect(vault.dir).toBe(join(tmp, 'MyVault'));
+    expect(vault.expectedHash).toBe('abc123');
+  });
+
+  it('throws VaultkitError(NOT_REGISTERED) when the name is not registered', async () => {
+    const cfgPath = writeCfg({});
+    try {
+      await Vault.requireFromName('Missing', cfgPath);
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(isVaultkitError(err)).toBe(true);
+      if (isVaultkitError(err)) {
+        expect(err.code).toBe('NOT_REGISTERED');
+        expect(err.message).toContain('"Missing"');
+      }
+    }
+  });
+
+  it('throws VaultkitError(INVALID_NAME) for an invalid name (validation runs before registry lookup)', async () => {
+    const cfgPath = writeCfg({});
+    try {
+      await Vault.requireFromName('owner/repo', cfgPath);
+      throw new Error('should have thrown');
+    } catch (err) {
+      expect(isVaultkitError(err)).toBe(true);
+      if (isVaultkitError(err)) {
+        expect(err.code).toBe('INVALID_NAME');
+      }
+    }
   });
 });
 
