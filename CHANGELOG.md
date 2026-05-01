@@ -4,6 +4,8 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.4.1] - 2026-05-01
+
 ### Docs
 - **README refresh.** Reframed the lede so the value prop lands without presupposing Obsidian familiarity (one-line tagline + a paragraph that explains what Obsidian is, what a vault is, and what vaultkit adds on top). New `## What you'd use this for` section enumerates four concrete scenarios — personal knowledge base, team wiki, public reference, reading notebook. Merged the previously-separate `## What a vault is` and `## Vault structure` into one `## Anatomy of a vault` (file tree + capabilities table together). Promoted the Claude Code payoff sentence to the top of `## Using with Claude Code`. Added `.mcp-start.js` to the file tree (was missing). Everything past the new sections is preserved verbatim.
 
