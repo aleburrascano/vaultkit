@@ -4,6 +4,12 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Refactor
+- **`visibility.ts` planner/executor decomposition.** The original implementation duplicated the same three-mode (`public` / `private` / `auth-gated`) branch structure twice — once in the plan-building block (English strings appended to `actions: string[]`) and once in the apply block (imperative `await ...` calls). Adding a fourth mode required editing both. The new shape is a typed discriminated union (`VisibilityAction`), a pure planner (`_buildVisibilityPlan(state) → VisibilityAction[]`), a `describeAction(action) → string` for the user-facing plan output, and a single `executeAction(action, ctx)` switch. Each atomic operation (`setRepoVisibility`, `enablePages`, `disablePages`, `setPagesVisibility`, `addDeployWorkflow`) lives in exactly one place; the compiler enforces switch exhaustiveness. Behavior preserved end-to-end — all 13 existing `visibility.test.ts` cases pass unchanged. Auth-gated "enable Pages with private visibility" now logs as two atomic steps (more accurate plan output).
+
+### Tests
+- **`tests/commands/visibility-plan.test.ts`** — 14 unit tests pinning the planner's decisions across all (current state × target mode) combinations, plus ordering invariants (`addDeployWorkflow` always first; `setRepoVisibility` before any Pages action).
+
 ### Fixed
 - **`--verbose` / `-v` flag now actually does something.** The flag was declared in [bin/vaultkit.ts](bin/vaultkit.ts) but never read; `ConsoleLogger.debug()` stayed a no-op even when the flag was passed, contradicting the README copy that promised trace output. The fix: a `preAction` hook on the commander program sets `process.env.VAULTKIT_VERBOSE='1'` when `--verbose` is passed, `ConsoleLogger`'s constructor reads the env var as a fallback for the `verbose` opt, and `wrap()` emits a start/end debug breadcrumb (`[debug] vaultkit <cmd> <args>` and `[debug] <cmd> ok|exit=N (<duration>ms)`) on stderr. Scripted callers can also pre-set `VAULTKIT_VERBOSE=1` directly without `--verbose`, matching the existing `VAULTKIT_LOG` pattern.
 

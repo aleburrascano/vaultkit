@@ -11,10 +11,10 @@ import {
   enablePages, setPagesVisibility, setRepoVisibility, disablePages, pagesExist, getPagesVisibility,
   repoUrl,
 } from '../lib/github.js';
-import { ConsoleLogger } from '../lib/logger.js';
+import { ConsoleLogger, type Logger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
-import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode } from '../lib/constants.js';
+import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode, type PublishMode } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,112 @@ const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
 
 export interface VisibilityOptions extends RunOptions {
   skipConfirm?: boolean;
+}
+
+/**
+ * Discriminated union of atomic operations that change a vault's
+ * publish visibility. Adding a new mode (or a new primitive operation)
+ * means: extend this union, extend `describeAction` and `executeAction`,
+ * and add a branch to `_buildVisibilityPlan`. The compiler enforces
+ * exhaustiveness via the `never` check in each switch.
+ */
+export type VisibilityAction =
+  | { kind: 'addDeployWorkflow' }
+  | { kind: 'setRepoVisibility'; target: 'public' | 'private' }
+  | { kind: 'enablePages' }
+  | { kind: 'disablePages' }
+  | { kind: 'setPagesVisibility'; target: 'public' | 'private' };
+
+interface VisibilityState {
+  target: PublishMode;
+  currentVis: string;
+  hasPages: boolean;
+  pagesVis: string | null;
+  needDeploy: boolean;
+}
+
+/**
+ * Pure planner. Given the current repo + Pages state and a target mode,
+ * returns the ordered list of atomic actions that move the repo into
+ * that state. Empty list = already at target. Exported with underscore
+ * prefix for unit testing only.
+ */
+export function _buildVisibilityPlan(state: VisibilityState): VisibilityAction[] {
+  const actions: VisibilityAction[] = [];
+  if (state.needDeploy) actions.push({ kind: 'addDeployWorkflow' });
+
+  switch (state.target) {
+    case 'public':
+      if (state.currentVis !== 'public') actions.push({ kind: 'setRepoVisibility', target: 'public' });
+      if (state.hasPages) {
+        if (state.pagesVis !== 'public') actions.push({ kind: 'setPagesVisibility', target: 'public' });
+      } else {
+        actions.push({ kind: 'enablePages' });
+      }
+      break;
+    case 'private':
+      if (state.currentVis !== 'private') actions.push({ kind: 'setRepoVisibility', target: 'private' });
+      if (state.hasPages) actions.push({ kind: 'disablePages' });
+      break;
+    case 'auth-gated':
+      if (state.currentVis !== 'private') actions.push({ kind: 'setRepoVisibility', target: 'private' });
+      if (state.hasPages) {
+        if (state.pagesVis !== 'private') actions.push({ kind: 'setPagesVisibility', target: 'private' });
+      } else {
+        actions.push({ kind: 'enablePages' });
+        actions.push({ kind: 'setPagesVisibility', target: 'private' });
+      }
+      break;
+  }
+
+  return actions;
+}
+
+function describeAction(action: VisibilityAction): string {
+  switch (action.kind) {
+    case 'addDeployWorkflow': return 'add .github/workflows/deploy.yml + _vault.json';
+    case 'setRepoVisibility': return `flip repo to ${action.target}`;
+    case 'enablePages': return 'enable Pages (workflow source)';
+    case 'disablePages': return 'disable Pages site';
+    case 'setPagesVisibility': return `set Pages visibility to ${action.target}`;
+  }
+}
+
+interface ExecuteCtx {
+  repoSlug: string;
+  vaultDir: string;
+  log: Logger;
+}
+
+async function executeAction(action: VisibilityAction, ctx: ExecuteCtx): Promise<void> {
+  const { repoSlug, vaultDir, log } = ctx;
+  switch (action.kind) {
+    case 'addDeployWorkflow': {
+      log.info('Adding deploy workflow...');
+      const wfDir = join(vaultDir, VAULT_DIRS.GITHUB_WORKFLOWS);
+      mkdirSync(wfDir, { recursive: true });
+      copyFileSync(DEPLOY_TMPL, join(wfDir, WORKFLOW_FILES.DEPLOY));
+      const [owner = '', repo = ''] = repoSlug.split('/');
+      writeFileSync(join(vaultDir, VAULT_FILES.VAULT_JSON), renderVaultJson(owner, repo));
+      return;
+    }
+    case 'setRepoVisibility':
+      log.info(`Setting repo to ${action.target}...`);
+      await setRepoVisibility(repoSlug, action.target);
+      return;
+    case 'enablePages':
+      log.info('Enabling Pages...');
+      await enablePages(repoSlug);
+      return;
+    case 'disablePages':
+      log.info('Disabling Pages...');
+      await disablePages(repoSlug);
+      return;
+    case 'setPagesVisibility':
+      log.info(`Setting Pages visibility to ${action.target}...`);
+      await setPagesVisibility(repoSlug, action.target);
+      return;
+  }
 }
 
 export async function run(
@@ -64,27 +170,7 @@ export async function run(
   const hasDeploy = existsSync(join(vault.dir, VAULT_DIRS.GITHUB_WORKFLOWS, WORKFLOW_FILES.DEPLOY));
   const needDeploy = (target === 'public' || target === 'auth-gated') && !hasDeploy;
 
-  // Build action plan
-  const actions: string[] = [];
-  if (needDeploy) actions.push('add .github/workflows/deploy.yml + _vault.json');
-  if (target === 'public') {
-    if (currentVis !== 'public') actions.push('flip repo to public');
-    if (hasPages) {
-      if (pagesVis !== 'public') actions.push('set Pages visibility to public');
-    } else {
-      actions.push('enable Pages (workflow source)');
-    }
-  } else if (target === 'private') {
-    if (currentVis !== 'private') actions.push('flip repo to private');
-    if (hasPages) actions.push('disable Pages site');
-  } else { // auth-gated
-    if (currentVis !== 'private') actions.push('flip repo to private');
-    if (hasPages) {
-      if (pagesVis !== 'private') actions.push('set Pages visibility to private');
-    } else {
-      actions.push('enable Pages + set visibility to private');
-    }
-  }
+  const actions = _buildVisibilityPlan({ target, currentVis, hasPages, pagesVis, needDeploy });
 
   if (actions.length === 0) {
     log.info(`Already ${target} — nothing to do.`);
@@ -92,7 +178,7 @@ export async function run(
   }
 
   log.info('Plan:');
-  for (const a of actions) log.info(`  - ${a}`);
+  for (const a of actions) log.info(`  - ${describeAction(a)}`);
   log.info('');
 
   if (!skipConfirm) {
@@ -101,61 +187,11 @@ export async function run(
     log.info('');
   }
 
-  let workflowAdded = false;
-
-  if (needDeploy) {
-    log.info('Adding deploy workflow...');
-    const wfDir = join(vault.dir, VAULT_DIRS.GITHUB_WORKFLOWS);
-    mkdirSync(wfDir, { recursive: true });
-    copyFileSync(DEPLOY_TMPL, join(wfDir, WORKFLOW_FILES.DEPLOY));
-
-    const [owner = '', repo = ''] = repoSlug.split('/');
-    writeFileSync(join(vault.dir, VAULT_FILES.VAULT_JSON), renderVaultJson(owner, repo));
-    workflowAdded = true;
+  for (const action of actions) {
+    await executeAction(action, { repoSlug, vaultDir: vault.dir, log });
   }
 
-  // Execute visibility changes
-  if (target === 'public') {
-    if (currentVis !== 'public') {
-      log.info('Setting repo to public...');
-      await setRepoVisibility(repoSlug, 'public');
-    }
-    if (hasPages) {
-      if (pagesVis !== 'public') {
-        log.info('Setting Pages visibility to public...');
-        await setPagesVisibility(repoSlug, 'public');
-      }
-    } else {
-      log.info('Enabling Pages...');
-      await enablePages(repoSlug);
-    }
-  } else if (target === 'private') {
-    if (currentVis !== 'private') {
-      log.info('Setting repo to private...');
-      await setRepoVisibility(repoSlug, 'private');
-    }
-    if (hasPages) {
-      log.info('Disabling Pages...');
-      await disablePages(repoSlug);
-    }
-  } else { // auth-gated
-    if (currentVis !== 'private') {
-      log.info('Setting repo to private...');
-      await setRepoVisibility(repoSlug, 'private');
-    }
-    if (hasPages) {
-      if (pagesVis !== 'private') {
-        log.info('Setting Pages visibility to private...');
-        await setPagesVisibility(repoSlug, 'private');
-      }
-    } else {
-      log.info('Enabling Pages with private visibility...');
-      await enablePages(repoSlug);
-      await setPagesVisibility(repoSlug, 'private');
-    }
-  }
-
-  if (workflowAdded) {
+  if (actions.some(a => a.kind === 'addDeployWorkflow')) {
     const filesToStage = [`${VAULT_DIRS.GITHUB_WORKFLOWS}/${WORKFLOW_FILES.DEPLOY}`, VAULT_FILES.VAULT_JSON];
     await add(vault.dir, filesToStage);
     await commit(vault.dir, 'chore: add Pages deploy workflow');
