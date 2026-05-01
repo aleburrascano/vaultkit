@@ -1,11 +1,9 @@
 import { copyFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { Vault, sha256 } from '../lib/vault.js';
 import { detectLayoutGaps, writeLayoutFiles } from '../lib/vault-layout.js';
-import { findTool } from '../lib/platform.js';
+import { findTool, getLauncherTemplate } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import { ConsoleLogger } from '../lib/logger.js';
@@ -13,9 +11,6 @@ import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
 import { VAULT_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
-
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
 
 export interface UpdateOptions extends RunOptions {
   skipConfirm?: boolean;
@@ -35,7 +30,7 @@ export async function run(
 
   // Launcher refresh detection
   const beforeHash = vault.hasLauncher() ? await vault.sha256OfLauncher() : '';
-  const tmplHash = await sha256(TMPL_PATH);
+  const tmplHash = await sha256(getLauncherTemplate());
   const launcherWillChange = beforeHash !== tmplHash;
 
   // Layout-repair detection
@@ -68,7 +63,7 @@ export async function run(
   }
 
   // Apply: copy launcher
-  copyFileSync(TMPL_PATH, vault.launcherPath);
+  copyFileSync(getLauncherTemplate(), vault.launcherPath);
   const afterHash = await vault.sha256OfLauncher();
 
   // Apply: create missing layout files
@@ -98,7 +93,7 @@ export async function run(
 
   // Commit
   const filesToStage: string[] = [];
-  if (launcherChanged) filesToStage.push('.mcp-start.js');
+  if (launcherChanged) filesToStage.push(VAULT_FILES.LAUNCHER);
   filesToStage.push(...added);
 
   await add(vault.dir, filesToStage);

@@ -330,7 +330,9 @@ describe.skipIf(!LIVE)('live: init creates real GitHub repo', { timeout: 60_000 
   it('registers vault in ~/.claude.json', async () => {
     const { getVaultDir } = await import('../../src/lib/registry.js');
     const dir = await getVaultDir(LIVE_VAULT);
-    expect(dir).toBeTruthy();
+    expect(dir).not.toBeNull();
+    expect(typeof dir).toBe('string');
+    expect((dir as string).length).toBeGreaterThan(0);
   });
 
   it('creates vault directory structure on disk', async () => {

@@ -27,6 +27,24 @@ export async function init(dir: string): Promise<void> {
   }
 }
 
+/**
+ * Renames the current branch (`git branch -M <name>`). Used by `init`
+ * after `git init` on git versions where `init -b main` wasn't honored.
+ * `reject: false` matches the historical inline call — older git still
+ * exits 0 here even if there's no commit yet.
+ */
+export async function setDefaultBranch(dir: string, branch: string): Promise<void> {
+  await execa('git', ['-C', dir, 'branch', '-M', branch], { reject: false });
+}
+
+/**
+ * Adds a named remote (`git remote add <name> <url>`). Used by `init`
+ * to wire up `origin` after the GitHub repo is created.
+ */
+export async function addRemote(dir: string, name: string, url: string): Promise<void> {
+  await execa('git', ['-C', dir, 'remote', 'add', name, url]);
+}
+
 export async function add(dir: string, files: string | string[]): Promise<void> {
   const fileArgs = Array.isArray(files) ? files : [files];
   await execa('git', ['-C', dir, 'add', ...fileArgs]);

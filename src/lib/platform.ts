@@ -1,9 +1,34 @@
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { existsSync, readdirSync } from 'node:fs';
 import { execa } from 'execa';
 import { confirm } from '@inquirer/prompts';
 import { VaultkitError } from './errors.js';
 import type { Logger } from './logger.js';
+
+const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Absolute path to the byte-immutable launcher template
+ * (`lib/mcp-start.js.tmpl`). In dev resolves to `<repo>/lib/...`; after
+ * `npm run build` the post-build script copies the template into
+ * `dist/lib/`, so the same `'../../lib/...'` offset works from
+ * `dist/src/lib/platform.js`. Single source of truth — `init.ts` and
+ * `update.ts` should call this rather than recomputing the path.
+ */
+export function getLauncherTemplate(): string {
+  return join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
+}
+
+/**
+ * Absolute path to the GitHub Pages deploy workflow template
+ * (`lib/deploy.yml.tmpl`). Same resolution rules as `getLauncherTemplate`.
+ * Used by `init.ts` (initial vault scaffolding) and `visibility.ts`
+ * (when toggling a vault to a publishing mode that needs the workflow).
+ */
+export function getDeployTemplate(): string {
+  return join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
+}
 
 export function isWindows(): boolean {
   return process.platform === 'win32';

@@ -1,5 +1,6 @@
 import { execa } from 'execa';
 import { findTool } from './platform.js';
+import { VaultkitError } from './errors.js';
 import type {
   GhUserResponse,
   GhRepoResponse,
@@ -74,6 +75,23 @@ export async function getCurrentUser(): Promise<string> {
 export async function getUserPlan(): Promise<string> {
   const json = await ghJson('api', 'user');
   return _parsePlanJson(json);
+}
+
+/**
+ * Throws `VaultkitError('PERMISSION_DENIED')` if the current GitHub
+ * account is on the Free plan (auth-gated Pages requires Pro+). The
+ * `extraHint` is appended on its own line so callers can add
+ * command-specific guidance (e.g. init's interactive flow says
+ * "Choose Public or Private instead"). Reads `getUserPlan()` once;
+ * defaults to 'free' on any API error so we fail closed rather than
+ * letting an auth-gated setup proceed against an unknown plan.
+ */
+export async function requireAuthGatedEligible(extraHint?: string): Promise<void> {
+  const plan = await getUserPlan().catch(() => 'free');
+  if (plan === 'free') {
+    const base = `auth-gated Pages requires GitHub Pro+ (your plan: ${plan}).`;
+    throw new VaultkitError('PERMISSION_DENIED', extraHint ? `${base}\n  ${extraHint}` : base);
+  }
 }
 
 export async function isAuthenticated(): Promise<boolean> {

@@ -81,7 +81,7 @@ describe('push', () => {
     await makeCommit(dir);
     const result = await push(dir);
     expect(result.success).toBe(false);
-    expect(result.stderr).toBeTruthy();
+    expect(result.stderr.length).toBeGreaterThan(0);
   });
 });
 
@@ -210,6 +210,6 @@ describe('pull — conflict and failure', () => {
 
     const result = await pull(c2);
     expect(result.success).toBe(false);
-    expect(result.stderr).toBeTruthy();
+    expect(result.stderr.length).toBeGreaterThan(0);
   }, 15000);
 });

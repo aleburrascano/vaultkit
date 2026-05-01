@@ -23,7 +23,7 @@ vi.mock('../../src/lib/github.js', async (importOriginal) => {
     ...real,
     isAdmin: vi.fn(),
     getVisibility: vi.fn(),
-    getUserPlan: vi.fn(),
+    requireAuthGatedEligible: vi.fn(),
     enablePages: vi.fn(),
     setPagesVisibility: vi.fn(),
     disablePages: vi.fn(),
@@ -37,7 +37,7 @@ import { execa } from 'execa';
 import { add, commit, pushOrPr } from '../../src/lib/git.js';
 import { findTool } from '../../src/lib/platform.js';
 import {
-  isAdmin, getVisibility, getUserPlan,
+  isAdmin, getVisibility, requireAuthGatedEligible,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
 } from '../../src/lib/github.js';
 import { writeCfg } from '../helpers/registry.js';
@@ -54,7 +54,7 @@ beforeEach(() => {
   vi.mocked(findTool).mockReset();
   vi.mocked(isAdmin).mockReset();
   vi.mocked(getVisibility).mockReset();
-  vi.mocked(getUserPlan).mockReset();
+  vi.mocked(requireAuthGatedEligible).mockReset();
   vi.mocked(enablePages).mockReset();
   vi.mocked(setPagesVisibility).mockReset();
   vi.mocked(disablePages).mockReset();
@@ -246,7 +246,10 @@ describe('VI-10: auth-gated on free plan', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('public');
     vi.mocked(pagesExist).mockResolvedValue(false);
-    vi.mocked(getUserPlan).mockResolvedValue('free');
+    const { VaultkitError } = await import('../../src/lib/errors.js');
+    vi.mocked(requireAuthGatedEligible).mockRejectedValue(
+      new VaultkitError('PERMISSION_DENIED', 'auth-gated Pages requires GitHub Pro+ (your plan: free).'),
+    );
 
     const { run } = await import('../../src/commands/visibility.js');
     await expect(run('MyVault', 'auth-gated', { cfgPath, log: silent, skipConfirm: true })).rejects.toThrow(/free|Pro/i);
@@ -262,7 +265,7 @@ describe('VI-11: auth-gated on Pro plan', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('private');
     vi.mocked(pagesExist).mockResolvedValue(false);
-    vi.mocked(getUserPlan).mockResolvedValue('pro');
+    vi.mocked(requireAuthGatedEligible).mockResolvedValue(undefined);
     mkdirSync(join(vaultDir, '.github', 'workflows'), { recursive: true });
     writeFileSync(join(vaultDir, '.github', 'workflows', 'deploy.yml'), '');
 
@@ -332,7 +335,7 @@ describe.skipIf(!LIVE)('live: visibility toggles real GitHub repo', { timeout: 6
     const realGithub = await vi.importActual<typeof import('../../src/lib/github.js')>('../../src/lib/github.js');
     vi.mocked(isAdmin).mockImplementation(realGithub.isAdmin);
     vi.mocked(getVisibility).mockImplementation(realGithub.getVisibility);
-    vi.mocked(getUserPlan).mockImplementation(realGithub.getUserPlan);
+    vi.mocked(requireAuthGatedEligible).mockImplementation(realGithub.requireAuthGatedEligible);
     vi.mocked(enablePages).mockImplementation(realGithub.enablePages);
     vi.mocked(setPagesVisibility).mockImplementation(realGithub.setPagesVisibility);
     vi.mocked(disablePages).mockImplementation(realGithub.disablePages);

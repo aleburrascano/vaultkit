@@ -266,7 +266,8 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
 
     const { getVaultDir } = await import('../../src/lib/registry.js');
     const dir = await getVaultDir(LIVE_VAULT);
-    expect(dir).toBeTruthy();
+    expect(dir).not.toBeNull();
+    expect(typeof dir).toBe('string');
 
     expect(existsSync(dir as string)).toBe(true);
   });

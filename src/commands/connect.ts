@@ -52,19 +52,20 @@ export async function run(
     throw new VaultkitError('ALREADY_REGISTERED', `${vaultDir} already exists.`);
   }
 
-  let cloned = false;
-  try {
-    log.info(`Cloning ${repo} into ${vaultDir}...`);
-    await clone(repo, vaultDir, { useGh: !!(await findTool('gh')) });
-    cloned = true;
+  log.info(`Cloning ${repo} into ${vaultDir}...`);
+  await clone(repo, vaultDir, { useGh: !!(await findTool('gh')) });
 
+  // From this point on, any thrown error should clean up the partial
+  // clone. Successful early returns (skipMcp, user-declined, no-launcher,
+  // no-claude) leave the clone intact -- the user opted into a partial
+  // state, not a failure.
+  try {
     const launcherPath = join(vaultDir, VAULT_FILES.LAUNCHER);
     if (!existsSync(launcherPath)) {
       log.info('');
       log.warn(`${name} is missing .mcp-start.js — it may have been created with an older version.`);
       log.info('  MCP registration skipped.');
       log.info('  Ask the owner to run \'vaultkit update\' and push, then reconnect.');
-      cloned = false;
       return;
     }
 
@@ -86,7 +87,6 @@ export async function run(
 
     if (skipMcp) {
       await addToRegistry(name, join(vaultDir, VAULT_FILES.LAUNCHER), hash, cfgPath);
-      cloned = false;
       log.info('');
       log.info(`Done. ${name} registered (MCP CLI skipped).`);
       log.info(`  Vault: ${vaultDir}`);
@@ -98,7 +98,6 @@ export async function run(
       log.info('');
       log.info(`MCP registration skipped. Vault cloned to: ${vaultDir}`);
       log.info(`To register later, re-run: vaultkit connect ${repo}`);
-      cloned = false;
       return;
     }
 
@@ -111,7 +110,6 @@ export async function run(
     if (claudePath) {
       log.info(`Registering MCP server: ${name}`);
       await runMcpAdd(claudePath, name, launcherPath, hash);
-      cloned = false;
       log.info('');
       log.info(`Done. ${name} is now available in Claude Code.`);
       log.info(`  Vault: ${vaultDir}`);
@@ -122,13 +120,13 @@ export async function run(
     log.warn('Claude Code CLI not installed — MCP registration skipped.');
     log.info(`  Once installed, run:`);
     log.info(`  ${manualMcpAddCommand(name, launcherPath, hash)}`);
-    cloned = false;
-  } finally {
-    if (cloned && existsSync(vaultDir)) {
+  } catch (err) {
+    if (existsSync(vaultDir)) {
       log.info('');
       log.info(`Connect failed — removing partial clone at ${vaultDir}`);
       rmSync(vaultDir, { recursive: true, force: true });
     }
+    throw err;
   }
 }
 

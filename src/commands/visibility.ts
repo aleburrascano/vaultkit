@@ -1,13 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { confirm } from '@inquirer/prompts';
 import { Vault } from '../lib/vault.js';
 import { renderVaultJson } from '../lib/vault-templates.js';
-import { findTool } from '../lib/platform.js';
+import { findTool, getDeployTemplate } from '../lib/platform.js';
 import { add, commit, pushOrPr, getRepoSlug } from '../lib/git.js';
 import {
-  getVisibility, isAdmin, getUserPlan,
+  getVisibility, isAdmin, requireAuthGatedEligible,
   enablePages, setPagesVisibility, setRepoVisibility, disablePages, pagesExist, getPagesVisibility,
   repoUrl,
 } from '../lib/github.js';
@@ -16,9 +15,6 @@ import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode, type PublishMode } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
-
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
 
 export interface VisibilityOptions extends RunOptions {
   skipConfirm?: boolean;
@@ -106,7 +102,7 @@ async function executeAction(action: VisibilityAction, ctx: ExecuteCtx): Promise
       log.info('Adding deploy workflow...');
       const wfDir = join(vaultDir, VAULT_DIRS.GITHUB_WORKFLOWS);
       mkdirSync(wfDir, { recursive: true });
-      copyFileSync(DEPLOY_TMPL, join(wfDir, WORKFLOW_FILES.DEPLOY));
+      copyFileSync(getDeployTemplate(), join(wfDir, WORKFLOW_FILES.DEPLOY));
       const [owner = '', repo = ''] = repoSlug.split('/');
       writeFileSync(join(vaultDir, VAULT_FILES.VAULT_JSON), renderVaultJson(owner, repo));
       return;
@@ -161,10 +157,7 @@ export async function run(
   log.info('');
 
   if (target === 'auth-gated') {
-    const plan = await getUserPlan().catch(() => 'free');
-    if (plan === 'free') {
-      throw new VaultkitError('PERMISSION_DENIED', `auth-gated Pages requires GitHub Pro+ (your plan: ${plan}).`);
-    }
+    await requireAuthGatedEligible();
   }
 
   const hasDeploy = existsSync(join(vault.dir, VAULT_DIRS.GITHUB_WORKFLOWS, WORKFLOW_FILES.DEPLOY));

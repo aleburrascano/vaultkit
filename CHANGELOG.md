@@ -4,6 +4,15 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Refactor (polish batch — 7 small items from the architectural review)
+- **Template path resolution centralized.** New `getLauncherTemplate()` and `getDeployTemplate()` helpers in [src/lib/platform.ts](src/lib/platform.ts) — one source of truth for the `'../../lib/<tmpl>'` offset that previously lived inline in three command files (`init.ts`, `update.ts`, `visibility.ts`). Same dev/post-build resolution semantics as before; removes a doc/path drift risk.
+- **`requireAuthGatedEligible(extraHint?)` extracted to [src/lib/github.ts](src/lib/github.ts).** The two callers (`init` and `visibility`) previously duplicated the `getUserPlan()` → free-plan throw pattern with slightly different messages. The optional `extraHint` preserves init's "Choose Public or Private instead" guidance without dragging the visibility caller into init's interactive context. Visibility test mocks updated to mock the helper directly (avoids the same-module `vi.mock` bypass when the internal `getUserPlan()` call lives in github.ts).
+- **`setDefaultBranch(dir, branch)` and `addRemote(dir, name, url)` added to [src/lib/git.ts](src/lib/git.ts).** Two `git` invocations in `init.ts` (the `git branch -M` and `git remote add`) now route through wrappers, raising the consistency floor toward the existing `gh`/`claude mcp` patterns.
+- **`connect.ts` cleanup pattern inverted.** Replaced the `cloned` flag (set true after clone, reset to `false` at 5 success-completion sites, checked in `finally`) with a `try`/`catch` around the post-clone work. Successful early returns no longer need to reset anything; only thrown errors trigger cleanup. Eliminates the boolean variable and the 5 reset sites; future contributors can't forget one. All 13 `connect.test.ts` cases pass unchanged.
+- **Magic string fix.** [update.ts:100](src/commands/update.ts#L100) `'.mcp-start.js'` literal replaced with `VAULT_FILES.LAUNCHER` (the file uses the constant elsewhere; this was the lone outlier).
+- **5 weak `.toBeTruthy()` assertions strengthened** across `tests/lib/errors.test.ts`, `tests/lib/git.test.ts`, `tests/commands/connect.test.ts`, `tests/commands/init.test.ts` — replaced with `.not.toBeNull()` / `.toBeDefined()` / `.length > 0` / type assertions that fail on more reality-shaped regressions.
+- **Stale planning doc flagged.** [docs/superpowers/plans/2026-04-29-unit-test-edge-cases.md](docs/superpowers/plans/2026-04-29-unit-test-edge-cases.md) gets a "STATUS: HISTORICAL" banner explaining the `.js` → `.ts` migration drift, so future sessions don't treat its "missing test" claims as current.
+
 ### CI
 - **Windows added to the CI matrix.** [`.github/workflows/ci.yml`](.github/workflows/ci.yml) now runs `check`/`build`/`test`/`npm publish --dry-run` on both `ubuntu-latest` and `windows-latest` with `fail-fast: false`. Closes the gap where vaultkit's explicit Windows code paths in [`src/lib/platform.ts`](src/lib/platform.ts) and [`src/lib/installGhForPlatform`](src/lib/platform.ts) were never exercised in CI. CONTRIBUTING.md updated to reflect the dual-OS gate.
 

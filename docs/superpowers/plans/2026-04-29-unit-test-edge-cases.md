@@ -1,5 +1,7 @@
 # Unit Test Edge Cases — Comprehensive Coverage Plan
 
+> **STATUS: HISTORICAL (frozen 2026-04-29).** This plan was written before the v2.1.0 TypeScript migration. File extensions throughout (`tests/commands/<name>.test.js`, `tests/lib/<name>.test.js`, `lib/mcp-start.js`, etc.) refer to the pre-migration `.js` source layout — the codebase is now `.ts`. Most of the proposed tests have since landed across v2.1.0–v2.3.0; check the actual `tests/` tree (`npm test` reports 364 tests at the time of this banner) before treating any "missing test" claim here as still accurate. Kept as a historical record of how the test surface was reasoned about, not as a current to-do list.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Expand the Vitest suite from 98 tests to cover every realistic failure mode, partial-state scenario, and edge case a new or experienced vaultkit user could encounter.

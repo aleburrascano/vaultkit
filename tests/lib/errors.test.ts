@@ -92,7 +92,9 @@ describe('DEFAULT_MESSAGES', () => {
       'UNRECOGNIZED_INPUT', 'PARTIAL_FAILURE',
     ];
     for (const code of expectedCodes) {
-      expect(DEFAULT_MESSAGES[code], `missing message for ${code}`).toBeTruthy();
+      const msg = DEFAULT_MESSAGES[code];
+      expect(msg, `missing message for ${code}`).toBeDefined();
+      expect((msg ?? '').length, `empty message for ${code}`).toBeGreaterThan(0);
     }
   });
 

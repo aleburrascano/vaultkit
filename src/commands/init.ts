@@ -1,15 +1,15 @@
 import { existsSync, mkdirSync, writeFileSync, rmSync, copyFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { confirm, input, select } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { validateName, sha256 } from '../lib/vault.js';
 import { renderVaultJson } from '../lib/vault-templates.js';
 import { createDirectoryTree, writeLayoutFiles, CANONICAL_LAYOUT_FILES } from '../lib/vault-layout.js';
-import { findTool, vaultsRoot, installGhForPlatform } from '../lib/platform.js';
+import { findTool, vaultsRoot, installGhForPlatform, getLauncherTemplate, getDeployTemplate } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, runMcpRemove, manualMcpAddCommand } from '../lib/mcp.js';
+import { setDefaultBranch, addRemote } from '../lib/git.js';
 import {
-  createRepo, deleteRepo, getCurrentUser, getUserPlan,
+  createRepo, deleteRepo, getCurrentUser, requireAuthGatedEligible,
   enablePages, setPagesVisibility,
   repoUrl, repoCloneUrl,
 } from '../lib/github.js';
@@ -18,10 +18,6 @@ import { VaultkitError } from '../lib/errors.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode, type PublishMode } from '../lib/constants.js';
 import { PROMPTS } from '../lib/messages.js';
 import type { CommandModule, RunOptions } from '../types.js';
-
-const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
-const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
 
 export interface InitOptions extends RunOptions {
   publishMode?: PublishMode;
@@ -75,10 +71,7 @@ async function selectPublishMode(publishModeOpt: PublishMode | undefined): Promi
   });
 
   if (publishMode === 'auth-gated') {
-    const plan = await getUserPlan().catch(() => 'free');
-    if (plan === 'free') {
-      throw new VaultkitError('PERMISSION_DENIED', `auth-gated Pages requires GitHub Pro+ (you're on Free).\n  Choose Public or Private instead.`);
-    }
+    await requireAuthGatedEligible('Choose Public or Private instead.');
   }
 
   return {
@@ -100,7 +93,7 @@ async function getGithubUser(): Promise<string> {
 
 async function createRemoteRepo(vaultDir: string, name: string, githubUser: string, repoVisibility: 'public' | 'private'): Promise<void> {
   await createRepo(name, { visibility: repoVisibility });
-  await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', repoCloneUrl(githubUser, name)]);
+  await addRemote(vaultDir, 'origin', repoCloneUrl(githubUser, name));
 }
 
 async function setupGitHubPages(githubUser: string, name: string, pagesPrivate: boolean, log: Logger): Promise<void> {
@@ -230,17 +223,17 @@ export async function run(
 
     createDirectoryTree(vaultDir);
     writeLayoutFiles(vaultDir, { name, siteUrl: doEnablePages ? baseUrl : '' }, CANONICAL_LAYOUT_FILES);
-    copyFileSync(TMPL_PATH, join(vaultDir, VAULT_FILES.LAUNCHER));
+    copyFileSync(getLauncherTemplate(), join(vaultDir, VAULT_FILES.LAUNCHER));
 
     if (writeDeploy) {
-      copyFileSync(DEPLOY_TMPL, join(vaultDir, VAULT_DIRS.GITHUB_WORKFLOWS, WORKFLOW_FILES.DEPLOY));
+      copyFileSync(getDeployTemplate(), join(vaultDir, VAULT_DIRS.GITHUB_WORKFLOWS, WORKFLOW_FILES.DEPLOY));
       writeFileSync(join(vaultDir, VAULT_FILES.VAULT_JSON), renderVaultJson(githubUser, name));
     }
 
     // [3/6] Git init + initial commit
     log.info('[3/6] Committing initial files...');
     await execa('git', ['init', vaultDir]);
-    await execa('git', ['-C', vaultDir, 'branch', '-M', 'main'], { reject: false });
+    await setDefaultBranch(vaultDir, 'main');
     await execa('git', ['-C', vaultDir, 'add', '.']);
     await execa('git', ['-C', vaultDir, 'commit', '-m', `chore: initialize ${name}`]);
 
