@@ -24,11 +24,11 @@ function makeVaultDir(dir: string): void {
 }
 
 describe('disconnect command', () => {
-  it('throws for invalid vault name', async () => {
+  it('throws INVALID_NAME for slashed input', async () => {
     const { run } = await import('../../src/commands/disconnect.js');
     await expect(
       run('bad/name', { cfgPath: join(tmp, '.claude.json'), skipConfirm: true })
-    ).rejects.toThrow();
+    ).rejects.toThrow(/owner\/repo|vault name/i);
   });
 
   it('throws when vault not registered', async () => {

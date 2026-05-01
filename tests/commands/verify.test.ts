@@ -78,7 +78,7 @@ describe('V-1: invalid vault name', () => {
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
 
     const { run } = await import('../../src/commands/verify.js');
-    await expect(run('bad name!', { cfgPath, log: silent })).rejects.toThrow();
+    await expect(run('bad name!', { cfgPath, log: silent })).rejects.toThrow(/letters, numbers, hyphens/i);
   });
 });
 

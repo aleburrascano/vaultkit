@@ -19,7 +19,7 @@ function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
 describe('destroy command', () => {
   it('throws for invalid vault name', async () => {
     const { run } = await import('../../src/commands/destroy.js');
-    await expect(run('bad/name', { cfgPath: join(tmp, '.claude.json'), skipConfirm: true })).rejects.toThrow();
+    await expect(run('bad/name', { cfgPath: join(tmp, '.claude.json'), skipConfirm: true })).rejects.toThrow(/owner\/repo|vault name/i);
   });
 
   it('throws when vault not registered', async () => {

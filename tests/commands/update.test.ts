@@ -20,14 +20,14 @@ function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
 describe('update command', () => {
   it('throws for invalid vault name', async () => {
     const { run } = await import('../../src/commands/update.js');
-    await expect(run('bad/name', { cfgPath: join(tmp, '.claude.json') })).rejects.toThrow();
+    await expect(run('bad/name', { cfgPath: join(tmp, '.claude.json') })).rejects.toThrow(/owner\/repo|vault name/i);
   });
 
   it('throws when vault not registered', async () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
     const { run } = await import('../../src/commands/update.js');
-    await expect(run('Unknown', { cfgPath })).rejects.toThrow();
+    await expect(run('Unknown', { cfgPath })).rejects.toThrow(/not a registered vault/i);
   });
 
   it('creates missing layout files in a git repo with remote', async () => {

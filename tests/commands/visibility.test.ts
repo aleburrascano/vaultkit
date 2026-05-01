@@ -108,7 +108,7 @@ async function runVisibility(name: string, target: string, options: RunVisOption
 describe('VI-1: invalid vault name', () => {
   it('throws on invalid name', async () => {
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('bad name', 'public', { log: silent })).rejects.toThrow();
+    await expect(run('bad name', 'public', { log: silent })).rejects.toThrow(/letters, numbers, hyphens/i);
   });
 });
 

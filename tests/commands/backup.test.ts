@@ -29,7 +29,7 @@ describe('backup command', () => {
   it('throws for invalid vault name', async () => {
     const { run } = await import('../../src/commands/backup.js');
     await expect(run('bad/name', { cfgPath: join(tmp, '.claude.json'), backupsDir: tmp }))
-      .rejects.toThrow();
+      .rejects.toThrow(/owner\/repo|vault name/i);
   });
 
   it('throws when vault not registered', async () => {

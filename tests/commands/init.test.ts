@@ -70,12 +70,12 @@ describe('I-1: invalid vault name', () => {
 
   it('throws on name with spaces', async () => {
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('my vault', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow();
+    await expect(run('my vault', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow(/letters, numbers, hyphens/i);
   });
 
   it('throws on name longer than 64 chars', async () => {
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('A'.repeat(65), { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow();
+    await expect(run('A'.repeat(65), { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow(/64 characters/i);
   });
 });
 
