@@ -5,7 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { getRepoSlug } from '../lib/git.js';
-import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
+import { isAdmin, ensureDeleteRepoScope, repoUrl } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
@@ -52,7 +52,7 @@ export async function run(
     log.info('This will permanently delete:');
     log.info(`  Local:  ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
     if (repoDeletable) {
-      log.info(`  GitHub: https://github.com/${repoSlug}`);
+      log.info(`  GitHub: ${repoUrl(repoSlug ?? '')}`);
     } else if (repoNote) {
       log.info(`  GitHub: ${repoSlug ?? 'unknown'}  ${repoNote}`);
     }

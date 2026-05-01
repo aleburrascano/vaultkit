@@ -25,6 +25,9 @@ import {
   getUserPlan,
   isAuthenticated,
   ensureDeleteRepoScope,
+  repoUrl,
+  repoCloneUrl,
+  pagesUrl,
 } from '../../src/lib/github.js';
 import { findTool } from '../../src/lib/platform.js';
 
@@ -271,5 +274,27 @@ describe('gh CLI not found', () => {
   it('createRepo throws a clear error when gh is missing', async () => {
     vi.mocked(findTool).mockResolvedValueOnce(null);
     await expect(createRepo('r')).rejects.toThrow(/gh CLI not found/);
+  });
+});
+
+describe('repoUrl', () => {
+  it('returns the base URL when no path is given', () => {
+    expect(repoUrl('owner/repo')).toBe('https://github.com/owner/repo');
+  });
+
+  it('appends a sub-page path', () => {
+    expect(repoUrl('owner/repo', 'settings/pages')).toBe('https://github.com/owner/repo/settings/pages');
+  });
+});
+
+describe('repoCloneUrl', () => {
+  it('returns the .git clone URL', () => {
+    expect(repoCloneUrl('owner', 'repo')).toBe('https://github.com/owner/repo.git');
+  });
+});
+
+describe('pagesUrl', () => {
+  it('returns the github.io site URL with trailing slash', () => {
+    expect(pagesUrl('owner', 'repo')).toBe('https://owner.github.io/repo/');
   });
 });

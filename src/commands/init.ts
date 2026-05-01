@@ -8,6 +8,7 @@ import { renderVaultJson } from '../lib/vault-templates.js';
 import { createDirectoryTree, writeLayoutFiles, CANONICAL_LAYOUT_FILES } from '../lib/vault-layout.js';
 import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
+import { repoUrl, repoCloneUrl } from '../lib/github.js';
 import { ConsoleLogger, type Logger } from '../lib/logger.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
 import { PROMPTS } from '../lib/messages.js';
@@ -134,7 +135,7 @@ async function getGithubUser(ghPath: string): Promise<string> {
 
 async function createRemoteRepo(ghPath: string, vaultDir: string, name: string, githubUser: string, repoVisibility: 'public' | 'private'): Promise<void> {
   await execa(ghPath, ['repo', 'create', name, `--${repoVisibility}`]);
-  await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', `https://github.com/${githubUser}/${name}.git`]);
+  await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', repoCloneUrl(githubUser, name)]);
 }
 
 async function setupGitHubPages(ghPath: string, githubUser: string, name: string, pagesPrivate: boolean, log: Logger): Promise<void> {
@@ -144,7 +145,7 @@ async function setupGitHubPages(ghPath: string, githubUser: string, name: string
   ], { reject: false });
   if (pagesResult.exitCode !== 0) {
     log.info(`  Warning: Could not auto-enable GitHub Pages.`);
-    log.info(`  Enable manually: https://github.com/${githubUser}/${name}/settings/pages`);
+    log.info(`  Enable manually: ${repoUrl(`${githubUser}/${name}`, 'settings/pages')}`);
     return;
   }
   if (pagesPrivate) {
@@ -171,7 +172,7 @@ async function setupBranchProtection(ghPath: string, githubUser: string, name: s
   ], { input: protectionBody, reject: false });
   if (result.exitCode !== 0) {
     log.info(`  Note: Branch protection not applied (may require a paid plan for private repos).`);
-    log.info(`  Set up manually: https://github.com/${githubUser}/${name}/settings/branches`);
+    log.info(`  Set up manually: ${repoUrl(`${githubUser}/${name}`, 'settings/branches')}`);
   }
 }
 
@@ -200,7 +201,7 @@ async function registerMcpForVault(vaultDir: string, name: string, skipInstallCh
 function printDoneSummary(name: string, githubUser: string, vaultDir: string, publishMode: PublishMode, baseUrl: string, log: Logger): void {
   log.info('');
   log.info('Done.');
-  log.info(`  Repo:  https://github.com/${githubUser}/${name}`);
+  log.info(`  Repo:  ${repoUrl(`${githubUser}/${name}`)}`);
   if (publishMode === 'public') {
     log.info(`  Site:  https://${baseUrl}  (live after CI finishes, ~1 min)`);
   } else if (publishMode === 'auth-gated') {

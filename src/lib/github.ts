@@ -148,3 +148,25 @@ export async function ensureDeleteRepoScope(): Promise<void> {
   if (!ghPath) throw new Error('gh CLI not found');
   await execa(ghPath, ['auth', 'refresh', '-h', 'github.com', '-s', 'delete_repo'], { timeout: 10_000, reject: false });
 }
+
+// ─── URL builders ─────────────────────────────────────────────────────────
+
+/**
+ * Public URL of a GitHub repository. With `path`, returns a sub-page URL
+ * (e.g. `repoUrl('owner/repo', 'settings/pages')`). Single source of
+ * truth so a hypothetical github.com → ghe.example.com swap edits one
+ * file, not ten.
+ */
+export function repoUrl(slug: string, path?: string): string {
+  return path ? `https://github.com/${slug}/${path}` : `https://github.com/${slug}`;
+}
+
+/** HTTPS clone URL for a repository (`.git` suffix). */
+export function repoCloneUrl(owner: string, repo: string): string {
+  return `https://github.com/${owner}/${repo}.git`;
+}
+
+/** Public site URL for a GitHub Pages-enabled repository (with trailing slash). */
+export function pagesUrl(owner: string, repo: string): string {
+  return `https://${owner}.github.io/${repo}/`;
+}

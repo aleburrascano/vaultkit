@@ -10,6 +10,7 @@ import { add, commit, pushOrPr, getRepoSlug } from '../lib/git.js';
 import {
   getVisibility, isAdmin, getUserPlan,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
+  repoUrl,
 } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
@@ -170,7 +171,7 @@ export async function run(
     }
   }
 
-  log.info(`\nhttps://github.com/${repoSlug}`);
+  log.info(`\n${repoUrl(repoSlug)}`);
 }
 
 // Compile-time check: `run` matches the CommandModule contract.
