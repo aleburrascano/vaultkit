@@ -4,6 +4,8 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-05-01
+
 ### Added
 - **`runMcpRemove(claudePath, name) → { removed }`** and **`manualMcpRemoveCommand(name)`** in [src/lib/mcp.ts](src/lib/mcp.ts) — single source of truth for the `claude mcp remove --scope user` argv shape, parallel to the existing `runMcpAdd` / `runMcpRepin` pattern. `runMcpRepin` and `manualMcpRepinCommands` now delegate to these helpers internally.
 - **`setRepoVisibility(slug, 'public' | 'private')`** in [src/lib/github.ts](src/lib/github.ts) — wraps `gh repo edit --visibility=<v> --accept-visibility-change-consequences`. Parallel to the existing `setPagesVisibility` / `enablePages` / `disablePages` helpers.
