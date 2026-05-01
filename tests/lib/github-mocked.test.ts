@@ -16,6 +16,7 @@ import {
   repoExists,
   isAdmin,
   getVisibility,
+  setRepoVisibility,
   enablePages,
   setPagesVisibility,
   disablePages,
@@ -125,6 +126,27 @@ describe('getVisibility', () => {
   it('throws on non-zero exit', async () => {
     vi.mocked(execa).mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'forbidden' } as never);
     await expect(getVisibility('owner/repo')).rejects.toThrow(/forbidden/);
+  });
+});
+
+describe('setRepoVisibility', () => {
+  it('issues gh repo edit --visibility with the consequences flag', async () => {
+    await setRepoVisibility('owner/repo', 'public');
+    expect(lastArgs()).toEqual([
+      'repo', 'edit', 'owner/repo',
+      '--visibility', 'public',
+      '--accept-visibility-change-consequences',
+    ]);
+  });
+
+  it('passes private when target is private', async () => {
+    await setRepoVisibility('owner/repo', 'private');
+    expect(lastArgs()).toContain('private');
+  });
+
+  it('throws on non-zero gh exit', async () => {
+    vi.mocked(execa).mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'rate limit' } as never);
+    await expect(setRepoVisibility('owner/repo', 'public')).rejects.toThrow(/rate limit/);
   });
 });
 

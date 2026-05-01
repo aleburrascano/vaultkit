@@ -112,6 +112,10 @@ export async function getVisibility(slug: string): Promise<string> {
   return _parseRepoJson(json).visibility;
 }
 
+export async function setRepoVisibility(slug: string, visibility: Visibility): Promise<void> {
+  await ghJson('repo', 'edit', slug, '--visibility', visibility, '--accept-visibility-change-consequences');
+}
+
 export interface EnablePagesOptions {
   buildType?: 'workflow' | 'legacy';
 }
