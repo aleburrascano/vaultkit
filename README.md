@@ -132,6 +132,7 @@ After that, every subsequent `vaultkit init` runs through the same prompts but s
 ```bash
 vaultkit connect owner/repo
 vaultkit connect https://github.com/owner/repo
+vaultkit connect git@github.com:owner/repo
 ```
 
 Clones the vault and registers it as an MCP server. The MCP server auto-pulls vault content (`raw/`, `wiki/`) on every Claude Code session start, so you always query the latest merged content without any manual `git pull`. The launcher script itself (`.mcp-start.js`) is **never** auto-pulled — see [Security & Trust](#security--trust).
