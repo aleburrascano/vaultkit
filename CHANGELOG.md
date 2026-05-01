@@ -4,6 +4,26 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-05-01
+
+### Fixed
+- **`vaultkit destroy` now actually deletes the GitHub repo.** Three swallowed errors hid the failure: `ensureDeleteRepoScope` killed the interactive `gh auth refresh` after a 10s timeout (so the user never completed the device-code browser flow), the `gh repo delete` call ignored stderr, and a `.catch(() => {})` swallowed the scope-refresh error. The fix: `ensureDeleteRepoScope` inherits stdio (so the prompt is visible) and throws `VaultkitError('AUTH_REQUIRED')` on failure with the manual recovery command; a new `deleteRepoCapturing(slug)` wrapper in [src/lib/github.ts](src/lib/github.ts) returns `{ ok, stderr }` so destroy can log the gh error alongside the warning; the silent catch is gone — if scope refresh fails, destroy aborts before any destructive action so the user can fix the scope and retry with state intact. Also, when running under PAT auth (`GH_TOKEN` env var, used by CI), `ensureDeleteRepoScope` skips the refresh entirely since PAT scopes are fixed at creation time.
+
+### Added
+- **`vaultkit setup`** — one-time post-install onboarding command. Walks the user through every prerequisite vaultkit needs across all of its commands, fixing what it can in place: node 22+, gh CLI (auto-installed via winget/brew/apt/dnf), `gh auth login` with the `repo` and `workflow` scopes baked in, git config user.name and user.email, and the claude CLI. Idempotent and re-runnable. Output mirrors `doctor`'s vocabulary (`+ ok` / `! warn` / `x fail`); the difference is that `doctor` reports while `setup` actively fixes.
+- **`src/lib/prereqs.ts`** — shared prerequisite-check lib (`checkNode`, `ensureGh`, `ensureGhAuth`, `ensureGitConfig`) used by both `setup` and `init`'s [1/6] preflight, so the two paths cannot drift. `ensureGhAuth` accepts an optional `scopes` list — `setup` passes `['repo', 'workflow']`; `init`'s preflight omits to preserve the original behavior.
+
+### Security
+- **`delete_repo` scope is still requested only at delete time, never preemptively.** Honors the `.claude/rules/security-invariants.md` rule that "delete_repo scope must be requested only when actually about to delete." Setup deliberately does not request it; users are prompted once on their first `vaultkit destroy`.
+
+### Changed
+- **Tests are always live** — removed the `VAULTKIT_LIVE_TEST=1` env-var gate that previously hid the live test suite from `npm test`. Every test run now hits the real GitHub API, creates ephemeral `vk-live-*` repos, and tears them down via `afterAll` hooks. Mocked unit tests in `*-mocked.test.ts` files are unaffected and continue to cover error paths that can't be reproduced live safely. The `npm run test:live` script and `cross-env` devDependency are dropped. Local prereq: `gh auth refresh -h github.com -s delete_repo` once.
+- **`vitest.config.ts`** — `fileParallelism: false` is hardcoded (was conditional on the env var). Live tests must run sequentially to avoid `~/.claude.json` write races.
+- **`init.ts` [1/6] preflight** — no behavior change, but the inline `ensureGhAuth` and `ensureGitConfig` private helpers are gone in favor of the shared lib.
+
+### CI
+- **CI now runs the live suite** with a `VAULTKIT_TEST_GH_TOKEN` repo secret (classic PAT with `repo` + `workflow` + `delete_repo` scopes on a dedicated test account). Pre-test cleanup removes `vk-live-*` orphans from prior runs; post-test cleanup with `if: always()` catches anything a crashed run leaked. Concurrency group `vaultkit-live-tests` prevents parallel CI runs from racing on the same test account. Job timeout raised to 15 minutes for the live workload.
+
 ## [2.4.1] - 2026-05-01
 
 ### Docs
