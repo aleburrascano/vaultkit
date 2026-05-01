@@ -14,7 +14,7 @@ import {
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
-import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
+import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -29,9 +29,8 @@ export async function run(
   target: string,
   { cfgPath, log = new ConsoleLogger(), skipConfirm = false }: VisibilityOptions = {},
 ): Promise<void> {
-  const validTargets = ['public', 'private', 'auth-gated'];
-  if (!validTargets.includes(target)) {
-    throw new VaultkitError('UNRECOGNIZED_INPUT', `Invalid mode '${target}'. Choose one of: public, private, auth-gated.`);
+  if (!isPublishMode(target)) {
+    throw new VaultkitError('UNRECOGNIZED_INPUT', `Invalid mode '${target}'. Choose one of: ${PUBLISH_MODES.join(', ')}.`);
   }
 
   const vault = await Vault.requireFromName(name, cfgPath);

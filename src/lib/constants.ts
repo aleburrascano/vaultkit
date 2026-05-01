@@ -59,3 +59,16 @@ export const VAULT_CONSTRAINTS = {
   /** Allowed characters in a vault name. */
   NAME_PATTERN: /^[a-zA-Z0-9_-]+$/,
 } as const;
+
+/**
+ * Valid publish modes for `vaultkit init` and `vaultkit visibility`.
+ * Single source of truth shared by the type, the runtime validator, and
+ * the user-facing error message ("Choose one of: private, public,
+ * auth-gated"). Adding a new mode is one edit here.
+ */
+export const PUBLISH_MODES = ['private', 'public', 'auth-gated'] as const;
+export type PublishMode = typeof PUBLISH_MODES[number];
+
+export function isPublishMode(value: string): value is PublishMode {
+  return (PUBLISH_MODES as readonly string[]).includes(value);
+}

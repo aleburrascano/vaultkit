@@ -14,15 +14,13 @@ import {
   repoUrl, repoCloneUrl,
 } from '../lib/github.js';
 import { ConsoleLogger, type Logger } from '../lib/logger.js';
-import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
+import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode, type PublishMode } from '../lib/constants.js';
 import { PROMPTS } from '../lib/messages.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
 const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
-
-export type PublishMode = 'private' | 'public' | 'auth-gated';
 
 export interface InitOptions extends RunOptions {
   publishMode?: PublishMode;
@@ -101,8 +99,8 @@ interface PublishConfig {
 }
 
 async function selectPublishMode(publishModeOpt: PublishMode | undefined): Promise<PublishConfig> {
-  if (publishModeOpt !== undefined && !['private', 'public', 'auth-gated'].includes(publishModeOpt)) {
-    throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: private, public, auth-gated`);
+  if (publishModeOpt !== undefined && !isPublishMode(publishModeOpt)) {
+    throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: ${PUBLISH_MODES.join(', ')}`);
   }
   const publishMode: PublishMode = publishModeOpt ?? await select<PublishMode>({
     message: 'Publish this vault as a public knowledge site?',
