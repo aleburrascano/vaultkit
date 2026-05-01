@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { execa } from 'execa';
+import { silent } from '../helpers/logger.js';
 
 vi.mock('execa', () => ({
   execa: vi.fn(),
@@ -99,7 +100,7 @@ describe('findOrInstallClaude', () => {
   it('returns the path immediately if Claude is already installed', async () => {
     vi.mocked(findTool).mockResolvedValueOnce('/usr/local/bin/claude');
     const promptInstall = vi.fn();
-    const result = await findOrInstallClaude({ log: () => {}, promptInstall });
+    const result = await findOrInstallClaude({ log: silent, promptInstall });
     expect(result).toBe('/usr/local/bin/claude');
     expect(promptInstall).not.toHaveBeenCalled();
   });
@@ -107,7 +108,7 @@ describe('findOrInstallClaude', () => {
   it('returns null if Claude is missing and the user declines to install', async () => {
     vi.mocked(findTool).mockResolvedValueOnce(null);
     const result = await findOrInstallClaude({
-      log: () => {},
+      log: silent,
       promptInstall: () => Promise.resolve(false),
     });
     expect(result).toBeNull();
@@ -120,7 +121,7 @@ describe('findOrInstallClaude', () => {
       .mockResolvedValueOnce('/post-install/claude');
     vi.mocked(npmGlobalBin).mockResolvedValueOnce('/global/bin');
     const result = await findOrInstallClaude({
-      log: () => {},
+      log: silent,
       promptInstall: () => Promise.resolve(true),
     });
     expect(vi.mocked(execa)).toHaveBeenCalledWith(

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
+import { silent } from '../helpers/logger.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-update-test-')); });
@@ -45,7 +46,7 @@ describe('update command', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
 
     const { run } = await import('../../src/commands/update.js');
-    await run('MyVault', { cfgPath, skipConfirm: true, log: () => {} });
+    await run('MyVault', { cfgPath, skipConfirm: true, log: silent });
 
     expect(existsSync(join(vaultDir, 'CLAUDE.md'))).toBe(true);
     expect(existsSync(join(vaultDir, '.mcp-start.js'))).toBe(true);

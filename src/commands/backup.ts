@@ -4,6 +4,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { archiveZip } from '../lib/git.js';
 import { vaultsRoot } from '../lib/platform.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -13,7 +14,7 @@ export interface BackupOptions extends RunOptions {
 
 export async function run(
   name: string,
-  { cfgPath, backupsDir, log = console.log }: BackupOptions = {},
+  { cfgPath, backupsDir, log = new ConsoleLogger() }: BackupOptions = {},
 ): Promise<string> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) throw new VaultkitError('NOT_REGISTERED', `Vault "${name}" is not registered.`);
@@ -24,8 +25,8 @@ export async function run(
 
   const statusResult = await execa('git', ['-C', vault.dir, 'status', '--porcelain'], { reject: false });
   if (String(statusResult.stdout ?? '').trim().length > 0) {
-    log(`Warning: Vault has uncommitted changes — they will NOT be in the backup.`);
-    log(`  Hint: cd "${vault.dir}" && git add . && git commit -m "wip: pre-backup snapshot"`);
+    log.info(`Warning: Vault has uncommitted changes — they will NOT be in the backup.`);
+    log.info(`  Hint: cd "${vault.dir}" && git add . && git commit -m "wip: pre-backup snapshot"`);
   }
 
   const resolvedBackupsDir = backupsDir ?? join(vaultsRoot(), '.backups');
@@ -43,7 +44,7 @@ export async function run(
 
   const size = statSync(zipPath).size;
   const sizeKb = (size / 1024).toFixed(1);
-  log(`Backup created: ${zipPath} (${sizeKb} KB)`);
+  log.info(`Backup created: ${zipPath} (${sizeKb} KB)`);
 
   return zipPath;
 }

@@ -1,6 +1,6 @@
 import { execa } from 'execa';
 import { findTool, npmGlobalBin, isWindows } from './platform.js';
-import type { LogFn } from '../types.js';
+import type { Logger } from './logger.js';
 
 /**
  * Single source of truth for the `claude mcp add` argv shape. Every
@@ -65,7 +65,7 @@ export function manualMcpRepinCommands(
  * the install machinery without sharing their UX.
  */
 export async function findOrInstallClaude(opts: {
-  log: LogFn;
+  log: Logger;
   promptInstall: () => Promise<boolean>;
 }): Promise<string | null> {
   const found = await findTool('claude');
@@ -74,7 +74,7 @@ export async function findOrInstallClaude(opts: {
   const install = await opts.promptInstall();
   if (!install) return null;
 
-  opts.log('Installing Claude Code CLI...');
+  opts.log.info('Installing Claude Code CLI...');
   await execa('npm', ['install', '-g', '@anthropic-ai/claude-code'], { reject: false });
   const bin = await npmGlobalBin();
   if (bin && bin !== '') {

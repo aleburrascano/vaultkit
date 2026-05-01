@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } 
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -98,7 +99,7 @@ interface RunVisOptions {
 async function runVisibility(name: string, target: string, options: RunVisOptions = {}): Promise<string[]> {
   const { run } = await import('../../src/commands/visibility.js');
   const lines: string[] = [];
-  await run(name, target, { log: (m: unknown) => lines.push(String(m)), ...options });
+  await run(name, target, { log: arrayLogger(lines), ...options });
   return lines;
 }
 
@@ -107,7 +108,7 @@ async function runVisibility(name: string, target: string, options: RunVisOption
 describe('VI-1: invalid vault name', () => {
   it('throws on invalid name', async () => {
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('bad name', 'public', { log: () => {} })).rejects.toThrow();
+    await expect(run('bad name', 'public', { log: silent })).rejects.toThrow();
   });
 });
 
@@ -119,7 +120,7 @@ describe('VI-2: invalid target mode', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeCfg(cfgPath, vaultDir);
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('MyVault', 'stealth', { cfgPath, log: () => {} })).rejects.toThrow(/invalid mode/i);
+    await expect(run('MyVault', 'stealth', { cfgPath, log: silent })).rejects.toThrow(/invalid mode/i);
   });
 });
 
@@ -130,7 +131,7 @@ describe('VI-3: vault not registered', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('Unknown', 'public', { cfgPath, log: () => {} })).rejects.toThrow(/not a registered vault/i);
+    await expect(run('Unknown', 'public', { cfgPath, log: silent })).rejects.toThrow(/not a registered vault/i);
   });
 });
 
@@ -143,7 +144,7 @@ describe('VI-4: gh not found', () => {
     writeCfg(cfgPath, vaultDir);
     vi.mocked(findTool).mockResolvedValue(null);
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('MyVault', 'public', { cfgPath, log: () => {} })).rejects.toThrow(/gh.*required/i);
+    await expect(run('MyVault', 'public', { cfgPath, log: silent })).rejects.toThrow(/gh.*required/i);
   });
 });
 
@@ -156,7 +157,7 @@ describe('VI-5: no origin remote', () => {
     writeCfg(cfgPath, vaultDir);
     vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: 'no remote' } as never);
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('MyVault', 'public', { cfgPath, log: () => {} })).rejects.toThrow(/no.*origin/i);
+    await expect(run('MyVault', 'public', { cfgPath, log: silent })).rejects.toThrow(/no.*origin/i);
   });
 });
 
@@ -170,7 +171,7 @@ describe('VI-6: non-admin', () => {
     vi.mocked(isAdmin).mockResolvedValue(false);
     vi.mocked(getVisibility).mockResolvedValue('public');
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('MyVault', 'private', { cfgPath, log: () => {} })).rejects.toThrow(/admin rights/i);
+    await expect(run('MyVault', 'private', { cfgPath, log: silent })).rejects.toThrow(/admin rights/i);
   });
 });
 
@@ -254,7 +255,7 @@ describe('VI-10: auth-gated on free plan', () => {
     vi.mocked(getUserPlan).mockResolvedValue('free');
 
     const { run } = await import('../../src/commands/visibility.js');
-    await expect(run('MyVault', 'auth-gated', { cfgPath, log: () => {}, skipConfirm: true })).rejects.toThrow(/free|Pro/i);
+    await expect(run('MyVault', 'auth-gated', { cfgPath, log: silent, skipConfirm: true })).rejects.toThrow(/free|Pro/i);
   });
 });
 
@@ -350,18 +351,18 @@ describe.skipIf(!LIVE)('live: visibility toggles real GitHub repo', { timeout: 6
   beforeAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   }, 60_000);
 
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
   }, 60_000);
 
   it('switches vault to public', async () => {
     const { run } = await import('../../src/commands/visibility.js');
-    await run(LIVE_VAULT, 'public', { skipConfirm: true, log: () => {} });
+    await run(LIVE_VAULT, 'public', { skipConfirm: true, log: silent });
 
     const { getVisibility, getCurrentUser } = await import('../../src/lib/github.js');
     const user = await getCurrentUser();
@@ -370,7 +371,7 @@ describe.skipIf(!LIVE)('live: visibility toggles real GitHub repo', { timeout: 6
 
   it('switches vault back to private', async () => {
     const { run } = await import('../../src/commands/visibility.js');
-    await run(LIVE_VAULT, 'private', { skipConfirm: true, log: () => {} });
+    await run(LIVE_VAULT, 'private', { skipConfirm: true, log: silent });
 
     const { getVisibility, getCurrentUser } = await import('../../src/lib/github.js');
     const user = await getCurrentUser();

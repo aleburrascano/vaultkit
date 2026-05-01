@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent } from '../helpers/logger.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-disconnect-test-')); });
@@ -70,7 +71,7 @@ const LIVE_VAULT = `vk-live-disconnect-${Date.now()}`;
 describe.skipIf(!LIVE)('live: disconnect removes local dir, keeps GitHub repo', { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   });
 
   afterAll(async () => {
@@ -93,7 +94,7 @@ describe.skipIf(!LIVE)('live: disconnect removes local dir, keeps GitHub repo', 
     const dir = await getVaultDir(LIVE_VAULT);
 
     const { run } = await import('../../src/commands/disconnect.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} });
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent });
 
     const { existsSync } = await import('node:fs');
     expect(existsSync(dir as string)).toBe(false);

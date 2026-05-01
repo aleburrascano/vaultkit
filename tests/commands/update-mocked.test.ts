@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 import { fileURLToPath } from 'node:url';
 
 const TMPL_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../lib/mcp-start.js.tmpl');
@@ -67,7 +68,7 @@ describe('U-1: not a git repo', () => {
     writeCfg(cfgPath, { NoGit: vaultDir });
 
     const { run } = await import('../../src/commands/update.js');
-    await expect(run('NoGit', { cfgPath, skipConfirm: true, log: () => {} })).rejects.toThrow(/not a git repository/i);
+    await expect(run('NoGit', { cfgPath, skipConfirm: true, log: silent })).rejects.toThrow(/not a git repository/i);
   });
 });
 
@@ -98,7 +99,7 @@ describe('U-2: already up to date, re-pins', () => {
 
     const { run } = await import('../../src/commands/update.js');
     const lines: string[] = [];
-    await run('UpToDate', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('UpToDate', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /already up to date/i.test(l))).toBe(true);
     // No actual commit should be made
@@ -119,7 +120,7 @@ describe('U-3: user declines', () => {
 
     const { run } = await import('../../src/commands/update.js');
     const lines: string[] = [];
-    await run('AbortVault', { cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run('AbortVault', { cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /aborted/i.test(l))).toBe(true);
     expect(vi.mocked(commit)).not.toHaveBeenCalled();
@@ -143,7 +144,7 @@ describe('U-4: launcher updated, direct push', () => {
 
     const { run } = await import('../../src/commands/update.js');
     const lines: string[] = [];
-    await run('DirectPush', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('DirectPush', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(vi.mocked(commit)).toHaveBeenCalled();
     expect(vi.mocked(pushOrPr)).toHaveBeenCalled();
@@ -166,7 +167,7 @@ describe('U-5: launcher updated, PR mode', () => {
 
     const { run } = await import('../../src/commands/update.js');
     const lines: string[] = [];
-    await run('PrMode', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('PrMode', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /PR|branch/i.test(l))).toBe(true);
     expect(lines.some(l => /vaultkit-update/i.test(l))).toBe(true);
@@ -189,7 +190,7 @@ describe('U-6: claude not found', () => {
 
     const { run } = await import('../../src/commands/update.js');
     const lines: string[] = [];
-    await run('NoClaude', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('NoClaude', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Claude Code not found|MCP re-registration skipped/i.test(l))).toBe(true);
     expect(lines.some(l => /claude mcp/i.test(l))).toBe(true);
@@ -213,7 +214,7 @@ describe('U-7: layout-only restore', () => {
     vi.mocked(pushOrPr).mockResolvedValueOnce({ mode: 'direct' });
 
     const { run } = await import('../../src/commands/update.js');
-    await run('LayoutOnly', { cfgPath, skipConfirm: true, log: () => {} });
+    await run('LayoutOnly', { cfgPath, skipConfirm: true, log: silent });
 
     expect(vi.mocked(commit)).toHaveBeenCalledWith(
       vaultDir,

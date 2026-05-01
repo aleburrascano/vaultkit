@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 // Mock interactive prompt so tests never block waiting for user input
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
@@ -65,7 +66,7 @@ function mockNoGit(): void {
 async function runVerify(name: string, cfgPath: string): Promise<string[]> {
   const { run } = await import('../../src/commands/verify.js');
   const lines: string[] = [];
-  await run(name, { cfgPath, log: (m: unknown) => lines.push(String(m)) });
+  await run(name, { cfgPath, log: arrayLogger(lines) });
   return lines;
 }
 
@@ -77,7 +78,7 @@ describe('V-1: invalid vault name', () => {
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
 
     const { run } = await import('../../src/commands/verify.js');
-    await expect(run('bad name!', { cfgPath, log: () => {} })).rejects.toThrow();
+    await expect(run('bad name!', { cfgPath, log: silent })).rejects.toThrow();
   });
 });
 
@@ -89,7 +90,7 @@ describe('V-2: vault not registered', () => {
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
 
     const { run } = await import('../../src/commands/verify.js');
-    await expect(run('NoSuchVault', { cfgPath, log: () => {} })).rejects.toThrow(/not a registered vault/i);
+    await expect(run('NoSuchVault', { cfgPath, log: silent })).rejects.toThrow(/not a registered vault/i);
   });
 });
 
@@ -103,7 +104,7 @@ describe('V-3: launcher missing', () => {
     writeCfg(cfgPath, { NoLauncher: { dir: vaultDir, hash: null } });
 
     const { run } = await import('../../src/commands/verify.js');
-    await expect(run('NoLauncher', { cfgPath, log: () => {} })).rejects.toThrow(/vaultkit update/i);
+    await expect(run('NoLauncher', { cfgPath, log: silent })).rejects.toThrow(/vaultkit update/i);
   });
 });
 
@@ -203,7 +204,7 @@ describe('V-7: hash mismatch, claude not found', () => {
 
     const { run } = await import('../../src/commands/verify.js');
     const lines: string[] = [];
-    await expect(run('NoClaude', { cfgPath, log: (m: unknown) => lines.push(String(m)) })).rejects.toThrow(/Claude Code not found/i);
+    await expect(run('NoClaude', { cfgPath, log: arrayLogger(lines) })).rejects.toThrow(/Claude Code not found/i);
     expect(lines.some(l => /claude mcp/i.test(l))).toBe(true);
   });
 });
@@ -247,19 +248,19 @@ describe.skipIf(!LIVE)('live: verify checks real launcher hash', { timeout: 60_0
   beforeAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   }, 60_000);
 
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
   }, 60_000);
 
   it('verifies launcher hash matches pinned hash', async () => {
     const { run } = await import('../../src/commands/verify.js');
     const lines: string[] = [];
-    await run(LIVE_VAULT, { yes: false, log: (m: unknown) => lines.push(String(m)) });
+    await run(LIVE_VAULT, { yes: false, log: arrayLogger(lines) });
     expect(lines.some(l => /verified/i.test(l))).toBe(true);
   });
 });

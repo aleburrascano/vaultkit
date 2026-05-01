@@ -25,13 +25,12 @@ export interface VaultRecord {
 
 // ─── Command runtime options ────────────────────────────────────────────
 
-/** Logger function compatible with `console.log`. */
-export type LogFn = (...args: unknown[]) => void;
+import type { Logger } from './lib/logger.js';
 
 /** Common options accepted by every command's `run` function. */
 export interface RunOptions {
   cfgPath?: string;
-  log?: LogFn;
+  log?: Logger;
 }
 
 /**

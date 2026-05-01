@@ -4,12 +4,13 @@ import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
 import { getStatus } from '../lib/git.js';
 import { Vault } from '../lib/vault.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export async function run(
   name: string | undefined,
-  { cfgPath, log = console.log }: RunOptions = {},
+  { cfgPath, log = new ConsoleLogger() }: RunOptions = {},
 ): Promise<void> {
   if (name) {
     // Single-vault detailed mode
@@ -20,31 +21,31 @@ export async function run(
     if (!vault.hasGitRepo()) {
       throw new Error(`${vault.dir} is not a git repository.`);
     }
-    log(`${name}`);
-    log(`  Path: ${vault.dir}`);
+    log.info(`${name}`);
+    log.info(`  Path: ${vault.dir}`);
     const result = await execa('git', ['-C', vault.dir, 'status'], { reject: false });
-    log(String(result.stdout ?? ''));
+    log.info(String(result.stdout ?? ''));
     return;
   }
 
   // Summary mode — all vaults
   const vaults = await getAllVaults(cfgPath);
   if (vaults.length === 0) {
-    log('No vaults registered.');
+    log.info('No vaults registered.');
     return;
   }
 
   for (const vault of vaults) {
-    log(`${vault.name}`);
-    log(`  Path: ${vault.dir}`);
+    log.info(`${vault.name}`);
+    log.info(`  Path: ${vault.dir}`);
 
     if (!existsSync(vault.dir)) {
-      log('  [DIR MISSING]\n');
+      log.info('  [DIR MISSING]\n');
       continue;
     }
 
     if (!existsSync(join(vault.dir, '.git'))) {
-      log('  branch:  [not a git repo]\n');
+      log.info('  branch:  [not a git repo]\n');
       continue;
     }
 
@@ -53,11 +54,11 @@ export async function run(
     const ahead = status.ahead > 0 ? `, ahead ${status.ahead}` : '';
     const behind = status.behind > 0 ? `, behind ${status.behind}` : '';
     const upstream = status.remote ? `[${dirty}${ahead}${behind}]` : '[no upstream]';
-    log(`  branch:  ${status.branch} ${upstream}`);
-    if (status.lastCommit) log(`  last:    ${status.lastCommit}`);
-    if (vault.hash) log(`  pinned:  ${vault.hash}`);
-    else log(`  pinned:  (none — run: vaultkit update ${vault.name})`);
-    log('');
+    log.info(`  branch:  ${status.branch} ${upstream}`);
+    if (status.lastCommit) log.info(`  last:    ${status.lastCommit}`);
+    if (vault.hash) log.info(`  pinned:  ${vault.hash}`);
+    else log.info(`  pinned:  (none — run: vaultkit update ${vault.name})`);
+    log.info('');
   }
 }
 

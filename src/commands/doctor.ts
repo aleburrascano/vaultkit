@@ -3,23 +3,24 @@ import { execa } from 'execa';
 import { getAllVaults } from '../lib/registry.js';
 import { Vault } from '../lib/vault.js';
 import { findTool, claudeJsonPath } from '../lib/platform.js';
-import type { ClaudeConfig, CommandModule, LogFn, RunOptions } from '../types.js';
+import { ConsoleLogger, type Logger } from '../lib/logger.js';
+import type { ClaudeConfig, CommandModule, RunOptions } from '../types.js';
 
-async function checkTool(name: string, required: boolean, log: LogFn): Promise<boolean> {
+async function checkTool(name: string, required: boolean, log: Logger): Promise<boolean> {
   const path = await findTool(name);
   if (!path) {
     const level = required ? 'x fail' : '! warn';
-    log(`  ${level}  ${name}: not found`);
+    log.info(`  ${level}  ${name}: not found`);
     return false;
   }
-  log(`  + ok   ${name}: ${path}`);
+  log.info(`  + ok   ${name}: ${path}`);
   return true;
 }
 
-export async function run({ cfgPath, log = console.log }: RunOptions = {}): Promise<number> {
+export async function run({ cfgPath, log = new ConsoleLogger() }: RunOptions = {}): Promise<number> {
   let issues = 0;
 
-  log('Prerequisites:');
+  log.info('Prerequisites:');
 
   // git — required
   const gitOk = await checkTool('git', true, log);
@@ -28,32 +29,32 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
   // node version — required >= 22
   const nodeMajor = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
   if (nodeMajor < 22) {
-    log(`  x fail  node: v${process.versions.node} (v22+ required)`);
+    log.info(`  x fail  node: v${process.versions.node} (v22+ required)`);
     issues++;
   } else {
-    log(`  + ok   node: v${process.versions.node}`);
+    log.info(`  + ok   node: v${process.versions.node}`);
   }
 
   // gh — recommended
   const ghPath = await findTool('gh');
   if (!ghPath) {
-    log('  ! warn  gh: not found (recommended — install from https://cli.github.com)');
+    log.info('  ! warn  gh: not found (recommended — install from https://cli.github.com)');
   } else {
     // Check auth
     const authResult = await execa(ghPath, ['auth', 'status'], { reject: false });
     if (authResult.exitCode !== 0) {
-      log(`  ! warn  gh: found but not authenticated (run: gh auth login)`);
+      log.info(`  ! warn  gh: found but not authenticated (run: gh auth login)`);
     } else {
-      log(`  + ok   gh: authenticated`);
+      log.info(`  + ok   gh: authenticated`);
     }
   }
 
   // claude — recommended
   const claudePath = await findTool('claude');
   if (!claudePath) {
-    log('  ! warn  claude: not found (run: npm install -g @anthropic-ai/claude-code)');
+    log.info('  ! warn  claude: not found (run: npm install -g @anthropic-ai/claude-code)');
   } else {
-    log(`  + ok   claude: ${claudePath}`);
+    log.info(`  + ok   claude: ${claudePath}`);
   }
 
   // git config
@@ -62,62 +63,62 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
   const userName = String(nameResult.stdout ?? '').trim();
   const userEmail = String(emailResult.stdout ?? '').trim();
   if (!userName || !userEmail) {
-    log('  x fail  git config: user.name or user.email not set');
-    log('    Run: git config --global user.name "Your Name"');
-    log('         git config --global user.email "you@example.com"');
+    log.info('  x fail  git config: user.name or user.email not set');
+    log.info('    Run: git config --global user.name "Your Name"');
+    log.info('         git config --global user.email "you@example.com"');
     issues++;
   } else {
-    log(`  + ok   git config: ${userName} <${userEmail}>`);
+    log.info(`  + ok   git config: ${userName} <${userEmail}>`);
   }
 
-  log('');
+  log.info('');
 
   // Vault health
   const records = await getAllVaults(cfgPath);
   if (records.length === 0) {
-    log('No vaults registered.');
+    log.info('No vaults registered.');
   } else {
-    log('Vaults:');
+    log.info('Vaults:');
     for (const record of records) {
       const vault = Vault.fromRecord(record);
       if (!vault.existsOnDisk()) {
-        log(`  x fail  ${vault.name}: directory missing (${vault.dir})`);
-        log(`    Hint: vaultkit connect ${vault.name}`);
+        log.info(`  x fail  ${vault.name}: directory missing (${vault.dir})`);
+        log.info(`    Hint: vaultkit connect ${vault.name}`);
         issues++;
         continue;
       }
 
       if (!vault.hasLauncher()) {
-        log(`  ! warn  ${vault.name}: .mcp-start.js missing`);
-        log(`    Hint: vaultkit update ${vault.name}`);
+        log.info(`  ! warn  ${vault.name}: .mcp-start.js missing`);
+        log.info(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
       const onDiskHash = await vault.sha256OfLauncher();
 
       if (!vault.expectedHash) {
-        log(`  ! warn  ${vault.name}: no pinned hash (legacy registration)`);
-        log(`    Hint: vaultkit update ${vault.name}`);
+        log.info(`  ! warn  ${vault.name}: no pinned hash (legacy registration)`);
+        log.info(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
       if (vault.expectedHash !== onDiskHash) {
-        log(`  x fail  ${vault.name}: hash mismatch`);
-        log(`    Pinned:  ${vault.expectedHash}`);
-        log(`    On-disk: ${onDiskHash}`);
-        log(`    Hint: vaultkit verify ${vault.name}`);
+        log.info(`  x fail  ${vault.name}: hash mismatch`);
+        log.info(`    Pinned:  ${vault.expectedHash}`);
+        log.info(`    On-disk: ${onDiskHash}`);
+        log.info(`    Hint: vaultkit verify ${vault.name}`);
         issues++;
         continue;
       }
 
       if (!vault.isVaultLike()) {
-        log(`  ! warn  ${vault.name}: vault layout incomplete`);
-        log(`    Hint: vaultkit update ${vault.name}`);
+        log.info(`  ! warn  ${vault.name}: vault layout incomplete`);
+        log.info(`    Hint: vaultkit update ${vault.name}`);
         continue;
       }
 
-      log(`  + ok   ${vault.name} (${vault.dir})`);
-      log(`         ${vault.expectedHash}`);
+      log.info(`  + ok   ${vault.name} (${vault.dir})`);
+      log.info(`         ${vault.expectedHash}`);
     }
 
     // Count non-vault MCP servers
@@ -127,16 +128,16 @@ export async function run({ cfgPath, log = console.log }: RunOptions = {}): Prom
       const vaultNames = new Set(records.map(v => v.name));
       const others = allServers.filter(n => !vaultNames.has(n));
       if (others.length > 0) {
-        log(`\n  Other MCP servers (not managed by vaultkit): ${others.join(', ')}`);
+        log.info(`\n  Other MCP servers (not managed by vaultkit): ${others.join(', ')}`);
       }
     } catch { /* ignore */ }
   }
 
-  log('');
+  log.info('');
   if (issues === 0) {
-    log('Everything looks good.');
+    log.info('Everything looks good.');
   } else {
-    log(`${issues} issue(s) found — address the items marked with x above.`);
+    log.info(`${issues} issue(s) found — address the items marked with x above.`);
   }
 
   return issues;

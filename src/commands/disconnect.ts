@@ -4,6 +4,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -15,7 +16,7 @@ export interface DisconnectOptions extends RunOptions {
 
 export async function run(
   name: string,
-  { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = console.log }: DisconnectOptions = {},
+  { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = new ConsoleLogger() }: DisconnectOptions = {},
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) {
@@ -27,19 +28,19 @@ export async function run(
   }
 
   if (!skipConfirm) {
-    log('');
-    log('This will remove:');
-    log(`  Local: ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
-    log(`  MCP:   ${name} server registration`);
-    log('');
-    log('The GitHub repo will NOT be deleted.');
-    log('');
+    log.info('');
+    log.info('This will remove:');
+    log.info(`  Local: ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
+    log.info(`  MCP:   ${name} server registration`);
+    log.info('');
+    log.info('The GitHub repo will NOT be deleted.');
+    log.info('');
     const typed = confirmName ?? await input({ message: 'Type the vault name to confirm:' });
     if (typed !== name) {
-      log('Aborted.');
+      log.info('Aborted.');
       return;
     }
-    log('');
+    log.info('');
   }
 
   if (skipMcp) {
@@ -47,24 +48,24 @@ export async function run(
   } else {
     const claudePath = await findTool('claude');
     if (claudePath) {
-      log('Removing MCP server...');
+      log.info('Removing MCP server...');
       await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
     } else {
-      log(`Warning: Claude Code not found — MCP cleanup skipped.`);
-      log(`  If registered, run: claude mcp remove ${name} --scope user`);
+      log.info(`Warning: Claude Code not found — MCP cleanup skipped.`);
+      log.info(`  If registered, run: claude mcp remove ${name} --scope user`);
     }
   }
 
   if (vault.existsOnDisk()) {
-    log('Deleting local vault...');
+    log.info('Deleting local vault...');
     rmSync(vault.dir, { recursive: true, force: true });
   } else {
-    log('Local directory not found — skipping.');
+    log.info('Local directory not found — skipping.');
   }
 
-  log('');
-  log(`Done. ${name} disconnected.`);
-  log(`Reconnect anytime with: vaultkit connect <owner/${name}>`);
+  log.info('');
+  log.info(`Done. ${name} disconnected.`);
+  log.info(`Reconnect anytime with: vaultkit connect <owner/${name}>`);
 }
 
 // Compile-time check: `run` matches the CommandModule contract.

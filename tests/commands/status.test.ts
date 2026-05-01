@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 vi.mock('../../src/lib/git.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../src/lib/git.js')>();
@@ -41,7 +42,7 @@ function makeGitRepo(dir: string): void {
 async function runStatus(name: string | undefined, cfgPath: string): Promise<string[]> {
   const { run } = await import('../../src/commands/status.js');
   const lines: string[] = [];
-  await run(name, { cfgPath, log: (m: unknown) => lines.push(String(m)) });
+  await run(name, { cfgPath, log: arrayLogger(lines) });
   return lines;
 }
 
@@ -231,7 +232,7 @@ describe('S-10: single-vault mode — not registered', () => {
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
 
     const { run } = await import('../../src/commands/status.js');
-    await expect(run('UnknownVault', { cfgPath, log: () => {} })).rejects.toThrow(/not registered/i);
+    await expect(run('UnknownVault', { cfgPath, log: silent })).rejects.toThrow(/not registered/i);
   });
 });
 
@@ -245,7 +246,7 @@ describe('S-11: single-vault mode — not a git repo', () => {
     writeCfg(cfgPath, { NotGit: { dir: vaultDir, hash: null } });
 
     const { run } = await import('../../src/commands/status.js');
-    await expect(run('NotGit', { cfgPath, log: () => {} })).rejects.toThrow(/not a git repository/i);
+    await expect(run('NotGit', { cfgPath, log: silent })).rejects.toThrow(/not a git repository/i);
   });
 });
 
@@ -269,7 +270,7 @@ describe('S-12: single-vault detail mode — real git repo', () => {
 
     const { run } = await import('../../src/commands/status.js');
     const lines: string[] = [];
-    await run('DetailVault', { cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run('DetailVault', { cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /DetailVault/i.test(l))).toBe(true);
     expect(lines.some(l => /Path:/i.test(l))).toBe(true);
@@ -294,26 +295,26 @@ describe.skipIf(!LIVE)('live: status reports real vault state', { timeout: 60_00
   beforeAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   }, 60_000);
 
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
   }, 60_000);
 
   it('lists vault in summary mode', async () => {
     const { run } = await import('../../src/commands/status.js');
     const lines: string[] = [];
-    await run(undefined, { log: (m: unknown) => lines.push(String(m)) });
+    await run(undefined, { log: arrayLogger(lines) });
     expect(lines.some(l => l.includes(LIVE_VAULT))).toBe(true);
   });
 
   it('shows detail in single-vault mode', async () => {
     const { run } = await import('../../src/commands/status.js');
     const lines: string[] = [];
-    await run(LIVE_VAULT, { log: (m: unknown) => lines.push(String(m)) });
+    await run(LIVE_VAULT, { log: arrayLogger(lines) });
     expect(lines.some(l => /main/i.test(l))).toBe(true);
     expect(lines.some(l => /clean|nothing to commit|up.to.date/i.test(l))).toBe(true);
   });

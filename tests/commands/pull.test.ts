@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-pull-test-')); });
@@ -22,7 +23,7 @@ describe('pull command', () => {
     writeCfg(cfgPath, { MissingVault: '/nonexistent/path/vault' });
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
     expect(lines.some(l => /missing|skip/i.test(l))).toBe(true);
   });
 
@@ -43,7 +44,7 @@ describe('pull command', () => {
 
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
     expect(lines.some(l => /up.to.date|already/i.test(l))).toBe(true);
   });
 
@@ -51,7 +52,7 @@ describe('pull command', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
     const { run } = await import('../../src/commands/pull.js');
-    await run({ cfgPath, log: () => {} });
+    await run({ cfgPath, log: silent });
   });
 
   it('logs synced when new commits are pulled', async () => {
@@ -76,7 +77,7 @@ describe('pull command', () => {
     writeCfg(cfgPath, { MyVault: vaultDir });
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
     expect(lines.some(l => /synced/i.test(l))).toBe(true);
   }, 15000);
 
@@ -99,7 +100,7 @@ describe('pull command', () => {
     });
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (msg: unknown) => lines.push(String(msg)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
     expect(lines.some(l => /GhostVault.*miss|skip/i.test(l))).toBe(true);
     expect(lines.some(l => /RealVault.*(up.to.date|synced)/i.test(l))).toBe(true);
   }, 15000);

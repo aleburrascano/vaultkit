@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn(), input: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -57,8 +58,8 @@ describe('DIS-1: vault dir missing', () => {
     vi.mocked(findTool).mockResolvedValue(null);
 
     const { run } = await import('../../src/commands/disconnect.js');
-    const lines: unknown[] = [];
-    await run('GhostVault', { cfgPath, skipConfirm: true, skipMcp: true, log: (m: unknown) => lines.push(m) });
+    const lines: string[] = [];
+    await run('GhostVault', { cfgPath, skipConfirm: true, skipMcp: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /not found.*skip|skip/i.test(String(l)))).toBe(true);
     expect(lines.some(l => /done/i.test(String(l)))).toBe(true);
@@ -77,8 +78,8 @@ describe('DIS-2: wrong name typed', () => {
     vi.mocked(input).mockResolvedValueOnce('WrongName');
 
     const { run } = await import('../../src/commands/disconnect.js');
-    const lines: unknown[] = [];
-    await run('MyVault', { cfgPath, skipMcp: true, log: (m: unknown) => lines.push(m) });
+    const lines: string[] = [];
+    await run('MyVault', { cfgPath, skipMcp: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /aborted/i.test(String(l)))).toBe(true);
     expect(existsSync(vaultDir)).toBe(true);
@@ -97,7 +98,7 @@ describe('DIS-3: correct name typed', () => {
     vi.mocked(input).mockResolvedValueOnce('ConfirmedVault');
 
     const { run } = await import('../../src/commands/disconnect.js');
-    await run('ConfirmedVault', { cfgPath, skipMcp: true, log: () => {} });
+    await run('ConfirmedVault', { cfgPath, skipMcp: true, log: silent });
 
     expect(existsSync(vaultDir)).toBe(false);
   });
@@ -116,7 +117,7 @@ describe('DIS-4: MCP removal with claude found', () => {
     vi.mocked(execa).mockResolvedValue({ exitCode: 0, stdout: '', stderr: '' } as never);
 
     const { run } = await import('../../src/commands/disconnect.js');
-    await run('McpVault', { cfgPath, skipConfirm: true, log: () => {} });
+    await run('McpVault', { cfgPath, skipConfirm: true, log: silent });
 
     const removeCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
@@ -138,8 +139,8 @@ describe('DIS-5: MCP removal skipped', () => {
     vi.mocked(findTool).mockResolvedValue(null);
 
     const { run } = await import('../../src/commands/disconnect.js');
-    const lines: unknown[] = [];
-    await run('NoClaudeVault', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(m) });
+    const lines: string[] = [];
+    await run('NoClaudeVault', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Claude Code not found|MCP cleanup skipped/i.test(String(l)))).toBe(true);
     expect(lines.some(l => /claude mcp remove/i.test(String(l)))).toBe(true);

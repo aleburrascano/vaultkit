@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent } from '../helpers/logger.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-destroy-test-')); });
@@ -59,7 +60,7 @@ const LIVE_VAULT = `vk-live-destroy-${Date.now()}`;
 describe.skipIf(!LIVE)('live: destroy removes real GitHub repo', { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   });
 
   afterAll(async () => {
@@ -79,7 +80,7 @@ describe.skipIf(!LIVE)('live: destroy removes real GitHub repo', { timeout: 60_0
 
   it('deletes the GitHub repo', async () => {
     const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} });
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent });
 
     const { repoExists, getCurrentUser } = await import('../../src/lib/github.js');
     const user = await getCurrentUser();

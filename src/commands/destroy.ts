@@ -5,6 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -24,7 +25,7 @@ async function resolveRepoSlug(dir: string): Promise<string | null> {
 
 export async function run(
   name: string,
-  { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = console.log }: DestroyOptions = {},
+  { cfgPath, skipConfirm = false, skipMcp = false, confirmName, log = new ConsoleLogger() }: DestroyOptions = {},
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) {
@@ -53,31 +54,31 @@ export async function run(
   }
 
   if (!skipConfirm) {
-    log('');
-    log('This will permanently delete:');
-    log(`  Local:  ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
+    log.info('');
+    log.info('This will permanently delete:');
+    log.info(`  Local:  ${vault.dir}${vault.existsOnDisk() ? '' : ' (not found — will skip)'}`);
     if (repoDeletable) {
-      log(`  GitHub: https://github.com/${repoSlug}`);
+      log.info(`  GitHub: https://github.com/${repoSlug}`);
     } else if (repoNote) {
-      log(`  GitHub: ${repoSlug ?? 'unknown'}  ${repoNote}`);
+      log.info(`  GitHub: ${repoSlug ?? 'unknown'}  ${repoNote}`);
     }
-    log(`  MCP:    ${name} server registration`);
-    log('');
+    log.info(`  MCP:    ${name} server registration`);
+    log.info('');
     const typed = confirmName ?? await input({ message: 'Type the vault name to confirm deletion:' });
-    if (typed !== name) { log('Aborted.'); return; }
-    log('');
+    if (typed !== name) { log.info('Aborted.'); return; }
+    log.info('');
   }
 
   const status = { github: 'skipped', mcp: 'skipped', local: 'skipped' };
 
   if (repoDeletable && repoSlug) {
-    log('Deleting GitHub repo...');
+    log.info('Deleting GitHub repo...');
     const gh = await findTool('gh');
     if (gh) {
       const result = await execa(gh, ['repo', 'delete', repoSlug, '--yes'], { reject: false });
       status.github = result.exitCode === 0 ? 'deleted' : 'failed';
       if (status.github === 'failed') {
-        log(`Warning: GitHub repo deletion failed — continuing with local + MCP cleanup.`);
+        log.info(`Warning: GitHub repo deletion failed — continuing with local + MCP cleanup.`);
       }
     }
   }
@@ -88,29 +89,29 @@ export async function run(
   } else {
     const claudePath = await findTool('claude');
     if (claudePath) {
-      log('Removing MCP server...');
+      log.info('Removing MCP server...');
       const result = await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
       status.mcp = result.exitCode === 0 ? 'removed' : 'not-registered';
-      if (status.mcp === 'not-registered') log('  (not registered — skipping)');
+      if (status.mcp === 'not-registered') log.info('  (not registered — skipping)');
     } else {
-      log('Warning: Claude Code not found — MCP cleanup skipped.');
-      log(`  If registered, run: claude mcp remove ${name} --scope user`);
+      log.info('Warning: Claude Code not found — MCP cleanup skipped.');
+      log.info(`  If registered, run: claude mcp remove ${name} --scope user`);
     }
   }
 
   if (vault.existsOnDisk()) {
-    log('Deleting local vault...');
+    log.info('Deleting local vault...');
     rmSync(vault.dir, { recursive: true, force: true });
     status.local = 'deleted';
   } else {
-    log('Local directory not found — skipping.');
+    log.info('Local directory not found — skipping.');
   }
 
-  log('');
-  log('Summary:');
-  log(`  GitHub: ${status.github}`);
-  log(`  MCP:    ${status.mcp}`);
-  log(`  Local:  ${status.local}`);
+  log.info('');
+  log.info('Summary:');
+  log.info(`  GitHub: ${status.github}`);
+  log.info(`  MCP:    ${status.mcp}`);
+  log.info(`  Local:  ${status.local}`);
 }
 
 // Compile-time check: `run` matches the CommandModule contract.

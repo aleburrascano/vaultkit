@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { arrayLogger } from '../helpers/logger.js';
 
 vi.mock('../../src/lib/git.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../src/lib/git.js')>();
@@ -92,7 +93,7 @@ describe('B-5: uncommitted changes', () => {
 
     const { run } = await import('../../src/commands/backup.js');
     const lines: string[] = [];
-    await run('DirtyVault', { cfgPath, backupsDir, log: (m: unknown) => lines.push(String(m)) });
+    await run('DirtyVault', { cfgPath, backupsDir, log: arrayLogger(lines) });
 
     expect(lines.some(l => /uncommitted changes/i.test(l))).toBe(true);
     expect(vi.mocked(archiveZip)).toHaveBeenCalledOnce();

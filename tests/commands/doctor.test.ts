@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { arrayLogger } from '../helpers/logger.js';
 
 vi.mock('../../src/lib/platform.js', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../src/lib/platform.js')>();
@@ -68,11 +69,10 @@ function writeLauncher(dir: string, content: string = '// launcher'): void {
   writeFileSync(join(dir, '.mcp-start.js'), content, 'utf8');
 }
 
-async function runDoctor(cfgPath: string, log?: (m: unknown) => void): Promise<{ issues: number; lines: string[] }> {
+async function runDoctor(cfgPath: string): Promise<{ issues: number; lines: string[] }> {
   const { run } = await import('../../src/commands/doctor.js');
   const lines: string[] = [];
-  const captureLog = log ?? ((m: unknown) => lines.push(String(m)));
-  const issues = await run({ cfgPath, log: captureLog });
+  const issues = await run({ cfgPath, log: arrayLogger(lines) });
   return { issues, lines };
 }
 

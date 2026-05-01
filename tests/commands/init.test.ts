@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } 
 import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 vi.mock('@inquirer/prompts', () => ({
   confirm: vi.fn(),
@@ -64,17 +65,17 @@ afterEach(() => {
 describe('I-1: invalid vault name', () => {
   it('throws on name with slash', async () => {
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('owner/repo', { cfgPath: join(tmp, '.claude.json'), log: () => {} })).rejects.toThrow(/owner\/repo/i);
+    await expect(run('owner/repo', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow(/owner\/repo/i);
   });
 
   it('throws on name with spaces', async () => {
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('my vault', { cfgPath: join(tmp, '.claude.json'), log: () => {} })).rejects.toThrow();
+    await expect(run('my vault', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow();
   });
 
   it('throws on name longer than 64 chars', async () => {
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('A'.repeat(65), { cfgPath: join(tmp, '.claude.json'), log: () => {} })).rejects.toThrow();
+    await expect(run('A'.repeat(65), { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow();
   });
 });
 
@@ -92,7 +93,7 @@ describe('I-2: node version check', () => {
 
     const { run } = await import('../../src/commands/init.js');
     // Should NOT throw "Node.js 22+ required"
-    await expect(run('ExistingVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} })).rejects.toThrow(/already exists/i);
+    await expect(run('ExistingVault', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow(/already exists/i);
   });
 });
 
@@ -105,7 +106,7 @@ describe('I-3: vault already exists', () => {
 
     const { run } = await import('../../src/commands/init.js');
     const lines: string[] = [];
-    await expect(run('ExistVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) }))
+    await expect(run('ExistVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) }))
       .rejects.toThrow(/already exists/i);
   });
 });
@@ -122,7 +123,7 @@ describe('I-4: gh not found, install fails', () => {
     }) as never);
 
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('NewVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} })).rejects.toThrow();
+    await expect(run('NewVault', { cfgPath: join(tmp, '.claude.json'), log: silent })).rejects.toThrow();
   });
 });
 
@@ -152,7 +153,7 @@ describe('I-5: gh not authenticated', () => {
     const { run } = await import('../../src/commands/init.js');
     // Will fail eventually (vault dir creation + git + gh steps) but should reach auth login
     const lines: string[] = [];
-    await run('AuthVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) }).catch(() => {});
+    await run('AuthVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) }).catch(() => {});
 
     const loginCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
@@ -180,7 +181,7 @@ describe('I-6: git user.name not configured', () => {
     vi.mocked(input).mockResolvedValueOnce('Test User');
 
     const { run } = await import('../../src/commands/init.js');
-    await run('NameVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} }).catch(() => {});
+    await run('NameVault', { cfgPath: join(tmp, '.claude.json'), log: silent }).catch(() => {});
 
     // input was called for the name prompt
     expect(vi.mocked(input)).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringMatching(/name/i) }));
@@ -202,7 +203,7 @@ describe('I-7: auth-gated on free plan', () => {
     }) as never);
 
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('GatedVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} }))
+    await expect(run('GatedVault', { cfgPath: join(tmp, '.claude.json'), log: silent }))
       .rejects.toThrow(/Pro\+|free/i);
   });
 });
@@ -219,7 +220,7 @@ describe('I-8: GitHub username not fetchable', () => {
     }) as never);
 
     const { run } = await import('../../src/commands/init.js');
-    await expect(run('UserVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} }))
+    await expect(run('UserVault', { cfgPath: join(tmp, '.claude.json'), log: silent }))
       .rejects.toThrow(/GitHub username/i);
   });
 });
@@ -242,7 +243,7 @@ describe('I-9: rollback on push failure', () => {
 
     const { run } = await import('../../src/commands/init.js');
     const lines: string[] = [];
-    await expect(run('RollbackVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) }))
+    await expect(run('RollbackVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) }))
       .rejects.toThrow();
 
     expect(lines.some(l => /rolling back/i.test(l))).toBe(true);
@@ -257,7 +258,7 @@ describe('I-10: MCP registration', () => {
   it('calls claude mcp add with expected-sha256', async () => {
     const { run } = await import('../../src/commands/init.js');
     const lines: string[] = [];
-    await run('McpVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) }).catch(() => {});
+    await run('McpVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) }).catch(() => {});
 
     const addCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
@@ -279,7 +280,7 @@ describe('I-11: claude not found', () => {
 
     const { run } = await import('../../src/commands/init.js');
     const lines: string[] = [];
-    await run('NoClaude', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) }).catch(() => {});
+    await run('NoClaude', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) }).catch(() => {});
 
     expect(lines.some(l => /claude mcp add/i.test(l))).toBe(true);
   });
@@ -304,13 +305,13 @@ describe.skipIf(!LIVE)('live: init creates real GitHub repo', { timeout: 60_000 
   beforeAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
   }, 60_000);
 
   afterAll(async () => {
     await restoreReal();
     const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
+    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
   }, 60_000);
 
   it('creates the GitHub repo', async () => {

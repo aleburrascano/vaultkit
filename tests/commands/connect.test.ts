@@ -11,6 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } 
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -88,7 +89,7 @@ describe('TR-1: clone fails — no directory left', () => {
     const vaultDir = join(tmp, 'MyVault');
 
     const { run } = await import('../../src/commands/connect.js');
-    await expect(run('owner/MyVault', { cfgPath: join(tmp, '.claude.json'), log: () => {} }))
+    await expect(run('owner/MyVault', { cfgPath: join(tmp, '.claude.json'), log: silent }))
       .rejects.toThrow(/repository not found/i);
 
     expect(existsSync(vaultDir)).toBe(false);
@@ -108,7 +109,7 @@ describe('TR-2: clone succeeds, launcher missing', () => {
 
     const { run } = await import('../../src/commands/connect.js');
     const lines: string[] = [];
-    await run('owner/NoLauncher', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
+    await run('owner/NoLauncher', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) });
 
     // Warning logged, vault dir left intact (user cloned a vault without launcher)
     expect(lines.some(l => /missing .mcp-start.js|MCP registration skipped/i.test(l))).toBe(true);
@@ -132,7 +133,7 @@ describe('TR-3: user declines MCP registration', () => {
 
     const { run } = await import('../../src/commands/connect.js');
     const lines: string[] = [];
-    await run('owner/DeclineVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
+    await run('owner/DeclineVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) });
 
     expect(lines.some(l => /skipped|To register later/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(true);
@@ -167,7 +168,7 @@ describe('TR-4: MCP registration fails — partial clone removed', () => {
     const { run } = await import('../../src/commands/connect.js');
     const lines: string[] = [];
     await expect(
-      run('owner/McpFailVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) })
+      run('owner/McpFailVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) })
     ).rejects.toThrow(/permission denied/i);
 
     expect(lines.some(l => /partial clone|Connect failed/i.test(l))).toBe(true);
@@ -192,7 +193,7 @@ describe('TR-5: successful connect', () => {
 
     const { run } = await import('../../src/commands/connect.js');
     const lines: string[] = [];
-    await run('owner/SuccessVault', { cfgPath: join(tmp, '.claude.json'), log: (m: unknown) => lines.push(String(m)) });
+    await run('owner/SuccessVault', { cfgPath: join(tmp, '.claude.json'), log: arrayLogger(lines) });
 
     expect(existsSync(vaultDir)).toBe(true);
     const addCalls = vi.mocked(execa).mock.calls.filter(c => {
@@ -228,7 +229,7 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
     await restoreReal();
     // Create a vault (creates the GitHub repo)
     const { run: initRun } = await import('../../src/commands/init.js');
-    await initRun(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: () => {} });
+    await initRun(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
 
     // Get the repo slug for later use
     const { getCurrentUser } = await import('../../src/lib/github.js');
@@ -237,7 +238,7 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
 
     // Disconnect locally (remove local dir + registry entry, but keep GitHub repo)
     const { run: disconnectRun } = await import('../../src/commands/disconnect.js');
-    await disconnectRun(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} });
+    await disconnectRun(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent });
   }, 60_000);
 
   afterAll(async () => {
@@ -247,7 +248,7 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
     const dir = await getVaultDir(LIVE_VAULT).catch(() => null);
     if (dir) {
       const { run: disconnectRun } = await import('../../src/commands/disconnect.js');
-      await disconnectRun(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: () => {} }).catch(() => {});
+      await disconnectRun(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
     }
     // Delete GitHub repo
     const { repoExists } = await import('../../src/lib/github.js');
@@ -261,7 +262,7 @@ describe.skipIf(!LIVE)('live: connect clones real GitHub repo', { timeout: 90_00
 
   it('clones repo and registers vault', async () => {
     const { run: connectRun } = await import('../../src/commands/connect.js');
-    await connectRun(repoSlug, { skipMcp: true, log: () => {} });
+    await connectRun(repoSlug, { skipMcp: true, log: silent });
 
     const { getVaultDir } = await import('../../src/lib/registry.js');
     const dir = await getVaultDir(LIVE_VAULT);

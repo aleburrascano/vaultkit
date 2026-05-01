@@ -11,6 +11,7 @@ import {
 import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -27,7 +28,7 @@ function isDirEmpty(dir: string): boolean {
 
 export async function run(
   name: string,
-  { cfgPath, log = console.log, skipConfirm = false }: UpdateOptions = {},
+  { cfgPath, log = new ConsoleLogger(), skipConfirm = false }: UpdateOptions = {},
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" is not a registered vault.`);
@@ -36,7 +37,7 @@ export async function run(
     throw new Error(`${vault.dir} is not a git repository — aborting.`);
   }
 
-  log(`Updating ${name} at ${vault.dir}...`);
+  log.info(`Updating ${name} at ${vault.dir}...`);
 
   // Launcher refresh detection
   const beforeHash = vault.hasLauncher() ? await vault.sha256OfLauncher() : '';
@@ -59,29 +60,29 @@ export async function run(
     missing.push('wiki/.gitkeep');
 
   // Summary
-  log('');
+  log.info('');
   if (launcherWillChange) {
-    log(`  .mcp-start.js: ${beforeHash || '(missing)'} → ${tmplHash}`);
+    log.info(`  .mcp-start.js: ${beforeHash || '(missing)'} → ${tmplHash}`);
   } else {
-    log(`  .mcp-start.js: up to date (${beforeHash})`);
+    log.info(`  .mcp-start.js: up to date (${beforeHash})`);
   }
   if (missing.length > 0) {
-    log(`  Missing layout files (${missing.length}):`);
-    for (const f of missing) log(`    - ${f}`);
+    log.info(`  Missing layout files (${missing.length}):`);
+    for (const f of missing) log.info(`    - ${f}`);
   } else {
-    log('  Layout: complete.');
+    log.info('  Layout: complete.');
   }
 
   if (!launcherWillChange && missing.length === 0) {
-    log('');
-    log('Already up to date. Re-pinning MCP registration anyway (idempotent).');
+    log.info('');
+    log.info('Already up to date. Re-pinning MCP registration anyway (idempotent).');
   }
 
   if (!skipConfirm) {
-    log('');
+    log.info('');
     const ok = await confirm({ message: 'Proceed?', default: false });
-    if (!ok) { log('Aborted.'); return; }
-    log('');
+    if (!ok) { log.info('Aborted.'); return; }
+    log.info('');
   }
 
   // Apply: copy launcher
@@ -111,21 +112,21 @@ export async function run(
   // Re-pin MCP
   const claudePath = await findTool('claude');
   if (claudePath) {
-    log(`Re-pinning MCP registration with SHA-256 ${afterHash}...`);
+    log.info(`Re-pinning MCP registration with SHA-256 ${afterHash}...`);
     await runMcpRepin(claudePath, name, vault.launcherPath, afterHash);
   } else {
     const manual = manualMcpRepinCommands(name, vault.launcherPath, afterHash);
-    log('Warning: Claude Code not found — MCP re-registration skipped.');
-    log(`  Once installed, run:`);
-    log(`    ${manual.remove}`);
-    log(`    ${manual.add}`);
+    log.info('Warning: Claude Code not found — MCP re-registration skipped.');
+    log.info(`  Once installed, run:`);
+    log.info(`    ${manual.remove}`);
+    log.info(`    ${manual.add}`);
   }
 
   const launcherChanged = afterHash !== beforeHash;
   if (!launcherChanged && added.length === 0) {
-    log('');
-    log('  Nothing to commit.');
-    log('Done. Restart Claude Code to apply the re-pinned registration.');
+    log.info('');
+    log.info('  Nothing to commit.');
+    log.info('Done. Restart Claude Code to apply the re-pinned registration.');
     return;
   }
 
@@ -139,8 +140,8 @@ export async function run(
   const stagedResult = await execa('git', ['-C', vault.dir, 'diff', '--cached', '--name-only'], { reject: false });
   const staged = String(stagedResult.stdout ?? '').trim();
   if (!staged) {
-    log('  Nothing staged — skipping commit.');
-    log('Done. Restart Claude Code to apply.');
+    log.info('  Nothing staged — skipping commit.');
+    log.info('Done. Restart Claude Code to apply.');
     return;
   }
 
@@ -154,7 +155,7 @@ export async function run(
   }
 
   await commit(vault.dir, commitMsg);
-  log('');
+  log.info('');
 
   const pushResult = await pushOrPr(vault.dir, {
     branchPrefix: 'vaultkit-update',
@@ -163,9 +164,9 @@ export async function run(
   });
 
   if (pushResult.mode === 'direct') {
-    log('Done. Restart Claude Code to apply the update.');
+    log.info('Done. Restart Claude Code to apply the update.');
   } else {
-    log(`Done. Changes will take effect after the PR (branch: ${pushResult.branch}) is merged.`);
+    log.info(`Done. Changes will take effect after the PR (branch: ${pushResult.branch}) is merged.`);
   }
 }
 

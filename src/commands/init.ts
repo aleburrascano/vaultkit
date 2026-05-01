@@ -10,7 +10,8 @@ import {
 } from '../lib/vault-templates.js';
 import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
-import type { CommandModule, LogFn, RunOptions } from '../types.js';
+import { ConsoleLogger, type Logger } from '../lib/logger.js';
+import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
 const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
@@ -25,8 +26,8 @@ export interface InitOptions extends RunOptions {
   skipInstallCheck?: boolean;
 }
 
-async function installGh(log: LogFn, skipInstallCheck: boolean = false): Promise<void> {
-  log('GitHub CLI not found — installing...');
+async function installGh(log: Logger, skipInstallCheck: boolean = false): Promise<void> {
+  log.info('GitHub CLI not found — installing...');
   if (isWindows()) {
     const ok = skipInstallCheck || await confirm({ message: 'Install GitHub CLI via winget?', default: true });
     if (ok) {
@@ -71,7 +72,7 @@ export async function run(
     gitName: gitNameOpt,
     gitEmail: gitEmailOpt,
     skipInstallCheck = false,
-    log = console.log,
+    log = new ConsoleLogger(),
   }: InitOptions = {},
 ): Promise<void> {
   validateName(name);
@@ -80,7 +81,7 @@ export async function run(
   const vaultDir = join(root, name);
 
   // [1/6] Prerequisites
-  log('[1/6] Checking prerequisites...');
+  log.info('[1/6] Checking prerequisites...');
 
   const nodeMajor = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
   if (nodeMajor < 22) {
@@ -99,7 +100,7 @@ export async function run(
   // Auth
   const authResult = await execa(ghPath, ['auth', 'status'], { reject: false });
   if (authResult.exitCode !== 0) {
-    log('  GitHub authentication required — a browser window will open...');
+    log.info('  GitHub authentication required — a browser window will open...');
     await execa(ghPath, ['auth', 'login'], { stdio: 'inherit' });
   }
 
@@ -118,7 +119,7 @@ export async function run(
   }
 
   // Publish mode
-  log('');
+  log.info('');
   if (publishModeOpt !== undefined && !['private', 'public', 'auth-gated'].includes(publishModeOpt)) {
     throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: private, public, auth-gated`);
   }
@@ -159,7 +160,7 @@ export async function run(
 
   try {
     // [2/6] Create vault
-    log(`\n[2/6] Creating vault: ${name} (${publishMode})`);
+    log.info(`\n[2/6] Creating vault: ${name} (${publishMode})`);
     mkdirSync(vaultDir, { recursive: true });
     createdDir = true;
 
@@ -186,45 +187,45 @@ export async function run(
     }
 
     // [3/6] Git init + commit
-    log('[3/6] Committing initial files...');
+    log.info('[3/6] Committing initial files...');
     await execa('git', ['init', vaultDir]);
     await execa('git', ['-C', vaultDir, 'branch', '-M', 'main'], { reject: false });
     await execa('git', ['-C', vaultDir, 'add', '.']);
     await execa('git', ['-C', vaultDir, 'commit', '-m', `chore: initialize ${name}`]);
 
     // [4/6] GitHub repo
-    log(`[4/6] Creating GitHub repo: ${name} (${repoVisibility})...`);
+    log.info(`[4/6] Creating GitHub repo: ${name} (${repoVisibility})...`);
     await execa(ghPath, ['repo', 'create', name, `--${repoVisibility}`]);
     await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', `https://github.com/${githubUser}/${name}.git`]);
     createdRepo = true;
 
     // [5/6] Pages + push
     if (enablePages) {
-      log('[5/6] Enabling Pages and pushing...');
+      log.info('[5/6] Enabling Pages and pushing...');
       const pagesResult = await execa(ghPath, [
         'api', `repos/${githubUser}/${name}/pages`,
         '--method', 'POST', '-f', 'build_type=workflow',
       ], { reject: false });
       if (pagesResult.exitCode !== 0) {
-        log(`  Warning: Could not auto-enable GitHub Pages.`);
-        log(`  Enable manually: https://github.com/${githubUser}/${name}/settings/pages`);
+        log.info(`  Warning: Could not auto-enable GitHub Pages.`);
+        log.info(`  Enable manually: https://github.com/${githubUser}/${name}/settings/pages`);
       } else if (pagesPrivate) {
         const privResult = await execa(ghPath, [
           'api', `repos/${githubUser}/${name}/pages`,
           '--method', 'PUT', '-f', 'visibility=private',
         ], { reject: false });
         if (privResult.exitCode !== 0) {
-          log(`  Warning: Could not set Pages to private — may be publicly accessible.`);
+          log.info(`  Warning: Could not set Pages to private — may be publicly accessible.`);
         }
       }
     } else {
-      log('[5/6] Pushing (no Pages — notes-only vault)...');
+      log.info('[5/6] Pushing (no Pages — notes-only vault)...');
     }
 
     await execa('git', ['-C', vaultDir, 'push', '-u', 'origin', 'main']);
 
     // [6/6] Branch protection
-    log('[6/6] Protecting main branch...');
+    log.info('[6/6] Protecting main branch...');
     const protectionBody = JSON.stringify({
       required_status_checks: null,
       enforce_admins: false,
@@ -236,8 +237,8 @@ export async function run(
       '--method', 'PUT', '--input', '-',
     ], { input: protectionBody, reject: false });
     if (protResult.exitCode !== 0) {
-      log(`  Note: Branch protection not applied (may require a paid plan for private repos).`);
-      log(`  Set up manually: https://github.com/${githubUser}/${name}/settings/branches`);
+      log.info(`  Note: Branch protection not applied (may require a paid plan for private repos).`);
+      log.info(`  Set up manually: https://github.com/${githubUser}/${name}/settings/branches`);
     }
 
     // MCP registration
@@ -251,44 +252,44 @@ export async function run(
     });
 
     if (claudePath) {
-      log(`Registering MCP server: ${name}`);
+      log.info(`Registering MCP server: ${name}`);
       await runMcpAdd(claudePath, name, launcherPath, hash);
       registeredMcp = true;
     } else {
-      log(`  Note: Claude Code CLI not installed — skipping MCP registration.`);
-      log(`  Once installed, run:`);
-      log(`  ${manualMcpAddCommand(name, launcherPath, hash)}`);
+      log.info(`  Note: Claude Code CLI not installed — skipping MCP registration.`);
+      log.info(`  Once installed, run:`);
+      log.info(`  ${manualMcpAddCommand(name, launcherPath, hash)}`);
     }
 
-    log('');
-    log('Done.');
-    log(`  Repo:  https://github.com/${githubUser}/${name}`);
+    log.info('');
+    log.info('Done.');
+    log.info(`  Repo:  https://github.com/${githubUser}/${name}`);
     if (publishMode === 'public') {
-      log(`  Site:  https://${baseUrl}  (live after CI finishes, ~1 min)`);
+      log.info(`  Site:  https://${baseUrl}  (live after CI finishes, ~1 min)`);
     } else if (publishMode === 'auth-gated') {
-      log(`  Site:  https://${baseUrl}  (auth-gated — visible only to authorized GitHub users)`);
+      log.info(`  Site:  https://${baseUrl}  (auth-gated — visible only to authorized GitHub users)`);
     }
-    log(`  Vault: ${vaultDir}`);
+    log.info(`  Vault: ${vaultDir}`);
 
   } catch (err) {
     // Transactional rollback
-    log('');
-    log('Setup failed — rolling back...');
+    log.info('');
+    log.info('Setup failed — rolling back...');
     if (registeredMcp) {
       const claudePath = await findTool('claude');
       if (claudePath) {
         await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
-        log('  MCP registration removed.');
+        log.info('  MCP registration removed.');
       }
     }
     if (createdRepo) {
       const result = await execa(ghPath, ['repo', 'delete', `${githubUser}/${name}`, '--yes'], { reject: false });
-      if (result.exitCode === 0) log('  GitHub repo deleted.');
-      else log(`  Warning: could not delete GitHub repo — run manually: gh repo delete ${githubUser}/${name} --yes`);
+      if (result.exitCode === 0) log.info('  GitHub repo deleted.');
+      else log.info(`  Warning: could not delete GitHub repo — run manually: gh repo delete ${githubUser}/${name} --yes`);
     }
     if (createdDir && existsSync(vaultDir)) {
       rmSync(vaultDir, { recursive: true, force: true });
-      log('  Local directory removed.');
+      log.info('  Local directory removed.');
     }
     throw err;
   }

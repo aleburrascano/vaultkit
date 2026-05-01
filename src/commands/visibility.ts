@@ -11,6 +11,7 @@ import {
   getVisibility, isAdmin, getUserPlan,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
 } from '../lib/github.js';
+import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -32,7 +33,7 @@ async function resolveRepoSlug(dir: string): Promise<string | null> {
 export async function run(
   name: string,
   target: string,
-  { cfgPath, log = console.log, skipConfirm = false }: VisibilityOptions = {},
+  { cfgPath, log = new ConsoleLogger(), skipConfirm = false }: VisibilityOptions = {},
 ): Promise<void> {
   const validTargets = ['public', 'private', 'auth-gated'];
   if (!validTargets.includes(target)) {
@@ -55,10 +56,10 @@ export async function run(
   const hasPages = await pagesExist(repoSlug).catch(() => false);
   const pagesVis = hasPages ? await getPagesVisibility(repoSlug).catch(() => '?') : null;
 
-  log(`Vault: ${name} (${repoSlug})`);
-  log(`Current: repo=${currentVis}, pages=${hasPages ? (pagesVis ?? 'enabled') : 'disabled'}`);
-  log(`Target:  ${target}`);
-  log('');
+  log.info(`Vault: ${name} (${repoSlug})`);
+  log.info(`Current: repo=${currentVis}, pages=${hasPages ? (pagesVis ?? 'enabled') : 'disabled'}`);
+  log.info(`Target:  ${target}`);
+  log.info('');
 
   if (target === 'auth-gated') {
     const plan = await getUserPlan().catch(() => 'free');
@@ -93,24 +94,24 @@ export async function run(
   }
 
   if (actions.length === 0) {
-    log(`Already ${target} — nothing to do.`);
+    log.info(`Already ${target} — nothing to do.`);
     return;
   }
 
-  log('Plan:');
-  for (const a of actions) log(`  - ${a}`);
-  log('');
+  log.info('Plan:');
+  for (const a of actions) log.info(`  - ${a}`);
+  log.info('');
 
   if (!skipConfirm) {
     const ok = await confirm({ message: 'Proceed?', default: false });
-    if (!ok) { log('Aborted.'); return; }
-    log('');
+    if (!ok) { log.info('Aborted.'); return; }
+    log.info('');
   }
 
   let workflowAdded = false;
 
   if (needDeploy) {
-    log('Adding deploy workflow...');
+    log.info('Adding deploy workflow...');
     const wfDir = join(vault.dir, '.github', 'workflows');
     mkdirSync(wfDir, { recursive: true });
     copyFileSync(DEPLOY_TMPL, join(wfDir, 'deploy.yml'));
@@ -123,39 +124,39 @@ export async function run(
   // Execute visibility changes
   if (target === 'public') {
     if (currentVis !== 'public') {
-      log('Setting repo to public...');
+      log.info('Setting repo to public...');
       await execa(gh, ['repo', 'edit', repoSlug, '--visibility', 'public', '--accept-visibility-change-consequences'], { reject: false });
     }
     if (hasPages) {
       if (pagesVis !== 'public') {
-        log('Setting Pages visibility to public...');
+        log.info('Setting Pages visibility to public...');
         await setPagesVisibility(repoSlug, 'public');
       }
     } else {
-      log('Enabling Pages...');
+      log.info('Enabling Pages...');
       await enablePages(repoSlug);
     }
   } else if (target === 'private') {
     if (currentVis !== 'private') {
-      log('Setting repo to private...');
+      log.info('Setting repo to private...');
       await execa(gh, ['repo', 'edit', repoSlug, '--visibility', 'private', '--accept-visibility-change-consequences'], { reject: false });
     }
     if (hasPages) {
-      log('Disabling Pages...');
+      log.info('Disabling Pages...');
       await disablePages(repoSlug);
     }
   } else { // auth-gated
     if (currentVis !== 'private') {
-      log('Setting repo to private...');
+      log.info('Setting repo to private...');
       await execa(gh, ['repo', 'edit', repoSlug, '--visibility', 'private', '--accept-visibility-change-consequences'], { reject: false });
     }
     if (hasPages) {
       if (pagesVis !== 'private') {
-        log('Setting Pages visibility to private...');
+        log.info('Setting Pages visibility to private...');
         await setPagesVisibility(repoSlug, 'private');
       }
     } else {
-      log('Enabling Pages with private visibility...');
+      log.info('Enabling Pages with private visibility...');
       await enablePages(repoSlug);
       await setPagesVisibility(repoSlug, 'private');
     }
@@ -171,11 +172,11 @@ export async function run(
       prBody: 'Adds GitHub Pages deploy workflow.',
     });
     if (pushResult.mode === 'pr') {
-      log(`Warning: Repo/Pages configured but workflow pending PR (branch: ${pushResult.branch}).`);
+      log.info(`Warning: Repo/Pages configured but workflow pending PR (branch: ${pushResult.branch}).`);
     }
   }
 
-  log(`\nhttps://github.com/${repoSlug}`);
+  log.info(`\nhttps://github.com/${repoSlug}`);
 }
 
 // Compile-time check: `run` matches the CommandModule contract.

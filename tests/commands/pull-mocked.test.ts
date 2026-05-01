@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { silent, arrayLogger } from '../helpers/logger.js';
 
 // Mock git.pull so we can control its responses without real network I/O
 vi.mock('../../src/lib/git.js', async (importOriginal) => {
@@ -46,7 +47,7 @@ describe('pull — mocked git scenarios', () => {
 
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Vault1.*fail/i.test(l))).toBe(true);
     expect(lines.some(l => /CONFLICT/i.test(l))).toBe(true);
@@ -67,7 +68,7 @@ describe('pull — mocked git scenarios', () => {
 
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Vault1.*timed? ?out/i.test(l))).toBe(true);
     expect(lines.some(l => /Vault2.*synced/i.test(l))).toBe(true);
@@ -86,7 +87,7 @@ describe('pull — mocked git scenarios', () => {
 
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /NoRemote.*fail/i.test(l))).toBe(true);
     expect(lines.some(l => /no tracking/i.test(l))).toBe(true);
@@ -101,7 +102,7 @@ describe('pull — mocked git scenarios', () => {
     const origTimeout = process.env.VAULTKIT_PULL_TIMEOUT;
     process.env.VAULTKIT_PULL_TIMEOUT = '5000';
     const { run } = await import('../../src/commands/pull.js');
-    await run({ cfgPath, log: () => {} });
+    await run({ cfgPath, log: silent });
     process.env.VAULTKIT_PULL_TIMEOUT = origTimeout;
 
     // pull was called with the custom timeout
@@ -120,7 +121,7 @@ describe('pull — mocked git scenarios', () => {
 
     const { run } = await import('../../src/commands/pull.js');
     const lines: string[] = [];
-    await run({ cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run({ cfgPath, log: arrayLogger(lines) });
 
     const summary = lines.find(l => /\d+ vault.s. synced/i.test(l));
     expect(summary).toMatch(/1 vault.s. synced/i);

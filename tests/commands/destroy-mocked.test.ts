@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { arrayLogger } from '../helpers/logger.js';
 
 vi.mock('@inquirer/prompts', () => ({ input: vi.fn(), confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -79,7 +80,7 @@ describe('DE-1: non-admin user', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('CollabVault', { cfgPath, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('CollabVault', { cfgPath, skipMcp: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /don't own|skipping/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(false);
@@ -102,7 +103,7 @@ describe('DE-2: admin user, wrong name typed', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('AdminVault', { cfgPath, log: (m: unknown) => lines.push(String(m)) });
+    await run('AdminVault', { cfgPath, log: arrayLogger(lines) });
 
     expect(lines.some(l => /aborted/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(true);
@@ -136,7 +137,7 @@ describe('DE-3: admin user confirms deletion', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('DeleteVault', { cfgPath, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('DeleteVault', { cfgPath, skipMcp: true, log: arrayLogger(lines) });
 
     const deleteCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
@@ -174,7 +175,7 @@ describe('DE-4: GitHub deletion fails', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('PartialVault', { cfgPath, skipConfirm: true, skipMcp: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('PartialVault', { cfgPath, skipConfirm: true, skipMcp: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /GitHub repo deletion failed|continuing/i.test(l))).toBe(true);
     expect(existsSync(vaultDir)).toBe(false);
@@ -196,7 +197,7 @@ describe('DE-5: MCP removal skipped', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('NoMcpVault', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('NoMcpVault', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Claude Code not found|MCP cleanup skipped/i.test(l))).toBe(true);
   });
@@ -217,7 +218,7 @@ describe('DE-6: summary output', () => {
 
     const { run } = await import('../../src/commands/destroy.js');
     const lines: string[] = [];
-    await run('SummaryVault', { cfgPath, skipConfirm: true, log: (m: unknown) => lines.push(String(m)) });
+    await run('SummaryVault', { cfgPath, skipConfirm: true, log: arrayLogger(lines) });
 
     expect(lines.some(l => /Summary/i.test(l))).toBe(true);
     expect(lines.some(l => /GitHub/i.test(l))).toBe(true);
