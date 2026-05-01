@@ -7,14 +7,19 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 ### Added
 - **`runMcpRemove(claudePath, name) → { removed }`** and **`manualMcpRemoveCommand(name)`** in [src/lib/mcp.ts](src/lib/mcp.ts) — single source of truth for the `claude mcp remove --scope user` argv shape, parallel to the existing `runMcpAdd` / `runMcpRepin` pattern. `runMcpRepin` and `manualMcpRepinCommands` now delegate to these helpers internally.
 - **`setRepoVisibility(slug, 'public' | 'private')`** in [src/lib/github.ts](src/lib/github.ts) — wraps `gh repo edit --visibility=<v> --accept-visibility-change-consequences`. Parallel to the existing `setPagesVisibility` / `enablePages` / `disablePages` helpers.
+- **`Vault.requireFromName(name, cfgPath?)`** in [src/lib/vault.ts](src/lib/vault.ts) — throw-on-missing variant of `tryFromName` that consolidates the canonical `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}` phrasing. Five commands collapse the four-line `tryFromName` + `if (!vault) throw …` preamble to a single line.
 
 ### Changed (internal — no user-facing behavior change)
 - **`destroy`, `disconnect`, and the `init` rollback path** now route MCP removal through `runMcpRemove` / `manualMcpRemoveCommand` instead of inlining the `claude mcp remove` argv. Closes the architectural gap where mcp.ts was single source of truth for `mcp add` / `mcp repin` but not `mcp remove`.
 - **`visibility.ts`** uses `setRepoVisibility` for the three `repo edit` call sites; the now-unused `execa` import is dropped.
 - **`init.ts`** uses the existing `getCurrentUser`, `getUserPlan`, `createRepo`, `enablePages`, `setPagesVisibility`, and `deleteRepo` wrappers in place of six inline `gh api` / `gh repo` calls. Helper signatures lose the `ghPath` parameter where the wrappers resolve `gh` internally. `gh repo create` now also passes `--confirm` uniformly. Branch protection (`gh api …/branches/main/protection`) remains inline — no wrapper exists yet.
+- **`visibility`, `verify`, `update`, `backup`, `status`** switched to `Vault.requireFromName`. `destroy` and `disconnect` keep their inline throws so command-specific user hints ('Run vaultkit status …', 'If you have an orphaned directory …') aren't lost.
+
+### Style
+- **`Warning:` prefix removed** from 13 log call sites across 8 commands (`disconnect`, `init`, `backup`, `connect`, `update`, `verify`, `destroy`, `visibility`). Per `code-style.md`: the `log.warn(…)` level conveys the warning; the prefix was redundant. Visible behavior change: warnings now go to stderr (via `console.warn` in `ConsoleLogger`) instead of stdout.
 
 ### Internal
-- Test count: 292 → 300 passing (8 new tests covering `runMcpRemove` argv + return shape and `setRepoVisibility` argv + error path).
+- Test count: 292 → 303 passing (11 new tests covering `runMcpRemove` argv + return shape, `setRepoVisibility` argv + error path, and `Vault.requireFromName` happy / not-registered / invalid-name paths).
 
 ## [2.2.0] - 2026-04-30
 
