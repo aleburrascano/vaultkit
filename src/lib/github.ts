@@ -1,6 +1,7 @@
 import { execa } from 'execa';
 import { findTool } from './platform.js';
 import { VaultkitError } from './errors.js';
+import type { Logger } from './logger.js';
 import type {
   GhUserResponse,
   GhRepoResponse,
@@ -111,6 +112,19 @@ export async function deleteRepo(slug: string): Promise<void> {
   await ghJson('repo', 'delete', slug, '--yes');
 }
 
+/**
+ * Variant of `deleteRepo` that captures gh's stderr instead of throwing.
+ * Used by `destroy` because the failure must be non-fatal (local + MCP
+ * cleanup still proceeds) but the user needs to see *why* gh refused so
+ * they can act (typically a missing `delete_repo` scope, despite our
+ * upfront `ensureDeleteRepoScope` call — e.g., the user declined the
+ * browser flow).
+ */
+export async function deleteRepoCapturing(slug: string): Promise<{ ok: boolean; stderr: string }> {
+  const result = await gh('repo', 'delete', slug, '--yes');
+  return { ok: result.exitCode === 0, stderr: result.stderr };
+}
+
 export async function repoExists(slug: string): Promise<boolean> {
   const result = await gh('repo', 'view', slug);
   return result.exitCode === 0;
@@ -165,10 +179,36 @@ export async function getPagesVisibility(slug: string): Promise<Visibility | nul
   return _parsePagesJson(result.stdout);
 }
 
-export async function ensureDeleteRepoScope(): Promise<void> {
+/**
+ * Grant the `delete_repo` OAuth scope to the current `gh` session.
+ *
+ * Implementation notes:
+ * - `gh auth refresh -s delete_repo` is **interactive** when the scope is
+ *   missing (one-time code + browser handoff). We pass `stdio: 'inherit'`
+ *   so the user actually sees the prompt; previous versions used
+ *   `timeout: 10_000` + `reject: false` and silently killed the process
+ *   before the user could complete the flow, leaving `delete_repo`
+ *   ungranted and `vaultkit destroy` then failing with HTTP 403 and no
+ *   diagnostic.
+ * - When the scope is already present, gh exits in well under a second
+ *   without printing anything noisy.
+ * - On non-zero exit (user declined / network error / etc.) we throw
+ *   `VaultkitError('AUTH_REQUIRED')` with the manual recovery command.
+ *   Callers must not silently swallow this — the user needs the hint.
+ *
+ * Per the security invariant in `.claude/rules/security-invariants.md`,
+ * this is called only at the moment of deletion, never preemptively.
+ */
+export async function ensureDeleteRepoScope(log?: Logger): Promise<void> {
   const ghPath = await findTool('gh');
-  if (!ghPath) throw new Error('gh CLI not found');
-  await execa(ghPath, ['auth', 'refresh', '-h', 'github.com', '-s', 'delete_repo'], { timeout: 10_000, reject: false });
+  if (!ghPath) throw new VaultkitError('TOOL_MISSING', 'gh CLI not found. Install from https://cli.github.com');
+  log?.info('Granting delete_repo scope (browser will open if not already granted)…');
+  const result = await execa(ghPath, ['auth', 'refresh', '-h', 'github.com', '-s', 'delete_repo'],
+    { stdio: 'inherit', reject: false });
+  if (result.exitCode !== 0) {
+    throw new VaultkitError('AUTH_REQUIRED',
+      `could not grant delete_repo scope. Run manually: gh auth refresh -h github.com -s delete_repo`);
+  }
 }
 
 // ─── URL builders ─────────────────────────────────────────────────────────

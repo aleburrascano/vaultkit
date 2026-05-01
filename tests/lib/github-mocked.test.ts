@@ -277,7 +277,7 @@ describe('isAuthenticated', () => {
 });
 
 describe('ensureDeleteRepoScope', () => {
-  it('runs gh auth refresh with delete_repo scope and 10s timeout', async () => {
+  it('runs gh auth refresh with delete_repo scope (interactive, no timeout)', async () => {
     await ensureDeleteRepoScope();
     const lastCall = vi.mocked(execa).mock.calls[vi.mocked(execa).mock.calls.length - 1];
     expect(lastCall?.[0]).toBe(GH_PATH);
@@ -289,6 +289,11 @@ describe('ensureDeleteRepoScope', () => {
   it('throws if gh CLI cannot be found', async () => {
     vi.mocked(findTool).mockResolvedValueOnce(null);
     await expect(ensureDeleteRepoScope()).rejects.toThrow(/gh CLI not found/);
+  });
+
+  it('throws AUTH_REQUIRED when gh auth refresh exits non-zero', async () => {
+    vi.mocked(execa).mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'cancelled' } as never);
+    await expect(ensureDeleteRepoScope()).rejects.toThrow(/delete_repo|gh auth refresh/);
   });
 });
 

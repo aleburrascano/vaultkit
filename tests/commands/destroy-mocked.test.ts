@@ -196,6 +196,61 @@ describe('DE-5: MCP removal skipped', () => {
   });
 });
 
+// ── DE-7: scope refresh fails — abort before any deletion ────────────────────
+
+describe('DE-7: ensureDeleteRepoScope failure aborts the run', () => {
+  it('throws and leaves the local directory intact', async () => {
+    const vaultDir = join(tmp, 'ScopeFailVault');
+    makeVaultDir(vaultDir, true);
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, { ScopeFailVault: vaultDir });
+
+    mockGitRemote('https://github.com/me/ScopeFailVault.git');
+    vi.mocked(isAdmin).mockResolvedValueOnce(true);
+    vi.mocked(ensureDeleteRepoScope).mockRejectedValueOnce(new Error('AUTH_REQUIRED: declined'));
+
+    const { run } = await import('../../src/commands/destroy.js');
+    await expect(
+      run('ScopeFailVault', { cfgPath, log: arrayLogger([]) }),
+    ).rejects.toThrow(/AUTH_REQUIRED|declined/);
+    expect(existsSync(vaultDir)).toBe(true);
+  });
+});
+
+// ── DE-8: gh repo delete failure surfaces stderr ─────────────────────────────
+
+describe('DE-8: gh repo delete failure surfaces stderr', () => {
+  it('logs the gh stderr alongside the failure warning', async () => {
+    const vaultDir = join(tmp, 'StderrVault');
+    makeVaultDir(vaultDir, true);
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, { StderrVault: vaultDir });
+
+    vi.mocked(isAdmin).mockResolvedValueOnce(true);
+    vi.mocked(ensureDeleteRepoScope).mockResolvedValue(undefined);
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
+      if (name === 'gh') return '/usr/bin/gh';
+      return null;
+    });
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
+      if (args?.[2] === 'remote' && args?.[3] === 'get-url') {
+        return { exitCode: 0, stdout: 'https://github.com/me/StderrVault.git', stderr: '' };
+      }
+      if (args?.includes('delete')) {
+        return { exitCode: 1, stdout: '', stderr: 'HTTP 403: Resource not accessible by integration' };
+      }
+      return { exitCode: 0, stdout: '', stderr: '' };
+    }) as never);
+
+    const { run } = await import('../../src/commands/destroy.js');
+    const lines: string[] = [];
+    await run('StderrVault', { cfgPath, skipConfirm: true, skipMcp: true, log: arrayLogger(lines) });
+
+    expect(lines.some(l => /HTTP 403/.test(l))).toBe(true);
+    expect(existsSync(vaultDir)).toBe(false);
+  });
+});
+
 // ── DE-6: summary shows github/mcp/local status ───────────────────────────────
 
 describe('DE-6: summary output', () => {

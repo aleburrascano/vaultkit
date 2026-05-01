@@ -1,11 +1,10 @@
 import { rmSync } from 'node:fs';
 import { input } from '@inquirer/prompts';
-import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { getRepoSlug } from '../lib/git.js';
-import { isAdmin, ensureDeleteRepoScope, repoUrl } from '../lib/github.js';
+import { isAdmin, ensureDeleteRepoScope, deleteRepoCapturing, repoUrl } from '../lib/github.js';
 import { runMcpRemove, manualMcpRemoveCommand } from '../lib/mcp.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
@@ -40,7 +39,10 @@ export async function run(
     const admin = await isAdmin(repoSlug).catch(() => false);
     if (admin) {
       repoDeletable = true;
-      await ensureDeleteRepoScope().catch(() => {});
+      // Throws VaultkitError('AUTH_REQUIRED') if the user declines the
+      // browser prompt — destroy aborts before any destructive action so
+      // the user can fix the scope and retry with state intact.
+      await ensureDeleteRepoScope(log);
     } else {
       repoNote = `(you don't own this repo — only local + MCP will be removed)`;
     }
@@ -68,13 +70,12 @@ export async function run(
 
   if (repoDeletable && repoSlug) {
     log.info('Deleting GitHub repo...');
-    const gh = await findTool('gh');
-    if (gh) {
-      const result = await execa(gh, ['repo', 'delete', repoSlug, '--yes'], { reject: false });
-      status.github = result.exitCode === 0 ? 'deleted' : 'failed';
-      if (status.github === 'failed') {
-        log.warn(`GitHub repo deletion failed — continuing with local + MCP cleanup.`);
-      }
+    const { ok, stderr } = await deleteRepoCapturing(repoSlug);
+    status.github = ok ? 'deleted' : 'failed';
+    if (!ok) {
+      log.warn(`GitHub repo deletion failed — continuing with local + MCP cleanup.`);
+      const detail = stderr.trim();
+      if (detail) log.warn(`  ${detail}`);
     }
   }
 
