@@ -16,7 +16,7 @@ paths:
 - Validate vault names via `validateName` from `src/lib/vault.ts` before any operation. Or use `Vault.tryFromName(name, cfgPath)` which validates internally.
 - Resolve vault directories via `Vault.tryFromName` or `getVaultDir` from `src/lib/registry.ts` — never from raw user input.
 - Use `findTool` from `src/lib/platform.ts` — never assume `gh` or `claude` are on PATH.
-- For MCP registration, always go through `runMcpAdd` / `runMcpRepin` from `src/lib/mcp.ts` — they are the single source of truth for the `--expected-sha256=<hash>` security invariant. Never call `claude mcp add` via raw `execa` from a command file.
+- For MCP registration, always go through `runMcpAdd` / `runMcpRemove` / `runMcpRepin` from `src/lib/mcp.ts` — they are the single source of truth for the `claude mcp <verb>` argv shapes (including the `--expected-sha256=<hash>` security invariant on `add`). Never call `claude mcp <verb>` via raw `execa` from a command file. The same rule applies to `gh repo`/`gh api` shapes wrapped in `src/lib/github.ts` (`createRepo`, `deleteRepo`, `setRepoVisibility`, `enablePages`, `setPagesVisibility`, etc.) — go through the wrappers.
 - Throw on errors (the `wrap()` in `bin/vaultkit.ts` catches and exits non-zero).
 - For known-category errors, throw `VaultkitError` (from `src/lib/errors.js`) with a `VaultkitErrorCode` so `wrap()` can map to a distinct exit code. Plain `Error` is fine for genuinely unexpected failures.
 - No silent catch-and-continue — if you catch, either re-throw or log + throw.
