@@ -1,18 +1,16 @@
-import { existsSync, mkdirSync, writeFileSync, readdirSync, copyFileSync } from 'node:fs';
+import { copyFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { Vault, sha256 } from '../lib/vault.js';
-import {
-  renderClaudeMd, renderReadme, renderDuplicateCheckYaml,
-  renderGitignore, renderGitattributes, renderIndexMd, renderLogMd,
-} from '../lib/vault-templates.js';
+import { detectLayoutGaps, writeLayoutFiles } from '../lib/vault-layout.js';
 import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
+import { VAULT_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -20,10 +18,6 @@ const TMPL_PATH = join(SCRIPT_DIR, '../../lib/mcp-start.js.tmpl');
 
 export interface UpdateOptions extends RunOptions {
   skipConfirm?: boolean;
-}
-
-function isDirEmpty(dir: string): boolean {
-  try { return readdirSync(dir).length === 0; } catch { return true; }
 }
 
 export async function run(
@@ -45,26 +39,14 @@ export async function run(
   const launcherWillChange = beforeHash !== tmplHash;
 
   // Layout-repair detection
-  const missing: string[] = [];
-  if (!existsSync(join(vault.dir, 'CLAUDE.md'))) missing.push('CLAUDE.md');
-  if (!existsSync(join(vault.dir, 'README.md'))) missing.push('README.md');
-  if (!existsSync(join(vault.dir, 'index.md'))) missing.push('index.md');
-  if (!existsSync(join(vault.dir, 'log.md'))) missing.push('log.md');
-  if (!existsSync(join(vault.dir, '.gitignore'))) missing.push('.gitignore');
-  if (!existsSync(join(vault.dir, '.gitattributes'))) missing.push('.gitattributes');
-  if (!existsSync(join(vault.dir, '.github', 'workflows', 'duplicate-check.yml')))
-    missing.push('.github/workflows/duplicate-check.yml');
-  if (!existsSync(join(vault.dir, 'raw')) || isDirEmpty(join(vault.dir, 'raw')))
-    missing.push('raw/.gitkeep');
-  if (!existsSync(join(vault.dir, 'wiki')) || isDirEmpty(join(vault.dir, 'wiki')))
-    missing.push('wiki/.gitkeep');
+  const missing = detectLayoutGaps(vault.dir);
 
   // Summary
   log.info('');
   if (launcherWillChange) {
-    log.info(`  .mcp-start.js: ${beforeHash || '(missing)'} → ${tmplHash}`);
+    log.info(`  ${VAULT_FILES.LAUNCHER}: ${beforeHash || '(missing)'} → ${tmplHash}`);
   } else {
-    log.info(`  .mcp-start.js: up to date (${beforeHash})`);
+    log.info(`  ${VAULT_FILES.LAUNCHER}: up to date (${beforeHash})`);
   }
   if (missing.length > 0) {
     log.info(`  Missing layout files (${missing.length}):`);
@@ -90,24 +72,8 @@ export async function run(
   const afterHash = await vault.sha256OfLauncher();
 
   // Apply: create missing layout files
-  const added: string[] = [];
-  for (const f of missing) {
-    const target = join(vault.dir, f);
-    mkdirSync(dirname(target), { recursive: true });
-    switch (f) {
-      case 'CLAUDE.md': writeFileSync(target, renderClaudeMd(name)); break;
-      case 'README.md': writeFileSync(target, renderReadme(name, '')); break;
-      case 'index.md': writeFileSync(target, renderIndexMd()); break;
-      case 'log.md': writeFileSync(target, renderLogMd()); break;
-      case 'raw/.gitkeep': writeFileSync(target, ''); break;
-      case 'wiki/.gitkeep': writeFileSync(target, ''); break;
-      case '.gitignore': writeFileSync(target, renderGitignore()); break;
-      case '.gitattributes': writeFileSync(target, renderGitattributes()); break;
-      case '.github/workflows/duplicate-check.yml':
-        writeFileSync(target, renderDuplicateCheckYaml()); break;
-    }
-    added.push(f);
-  }
+  writeLayoutFiles(vault.dir, { name, siteUrl: '' }, missing);
+  const added = [...missing];
 
   // Re-pin MCP
   const claudePath = await findTool('claude');

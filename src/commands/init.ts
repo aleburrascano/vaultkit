@@ -4,13 +4,12 @@ import { fileURLToPath } from 'node:url';
 import { confirm, input, select } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { validateName, sha256 } from '../lib/vault.js';
-import {
-  renderClaudeMd, renderReadme, renderDuplicateCheckYaml,
-  renderVaultJson, renderGitignore, renderGitattributes, renderIndexMd, renderLogMd,
-} from '../lib/vault-templates.js';
+import { renderVaultJson } from '../lib/vault-templates.js';
+import { createDirectoryTree, writeLayoutFiles, CANONICAL_LAYOUT_FILES } from '../lib/vault-layout.js';
 import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
 import { ConsoleLogger, type Logger } from '../lib/logger.js';
+import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -164,26 +163,16 @@ export async function run(
     mkdirSync(vaultDir, { recursive: true });
     createdDir = true;
 
-    // Directory structure
-    for (const sub of ['raw/articles', 'raw/books', 'raw/papers', 'raw/notes', 'raw/transcripts', 'raw/assets',
-      'wiki/concepts', 'wiki/topics', 'wiki/people', 'wiki/sources', '.github/workflows']) {
-      mkdirSync(join(vaultDir, sub), { recursive: true });
-    }
+    // Directory tree + canonical layout files
+    createDirectoryTree(vaultDir);
+    writeLayoutFiles(vaultDir, { name, siteUrl: enablePages ? baseUrl : '' }, CANONICAL_LAYOUT_FILES);
 
-    writeFileSync(join(vaultDir, 'raw', '.gitkeep'), '');
-    writeFileSync(join(vaultDir, 'wiki', '.gitkeep'), '');
-    writeFileSync(join(vaultDir, 'CLAUDE.md'), renderClaudeMd(name));
-    writeFileSync(join(vaultDir, 'README.md'), renderReadme(name, enablePages ? baseUrl : ''));
-    writeFileSync(join(vaultDir, 'index.md'), renderIndexMd());
-    writeFileSync(join(vaultDir, 'log.md'), renderLogMd());
-    writeFileSync(join(vaultDir, '.gitignore'), renderGitignore());
-    writeFileSync(join(vaultDir, '.gitattributes'), renderGitattributes());
-    writeFileSync(join(vaultDir, '.github', 'workflows', 'duplicate-check.yml'), renderDuplicateCheckYaml());
-    copyFileSync(TMPL_PATH, join(vaultDir, '.mcp-start.js'));
+    // Launcher (byte-immutable, copied verbatim from the template)
+    copyFileSync(TMPL_PATH, join(vaultDir, VAULT_FILES.LAUNCHER));
 
     if (writeDeploy) {
-      copyFileSync(DEPLOY_TMPL, join(vaultDir, '.github', 'workflows', 'deploy.yml'));
-      writeFileSync(join(vaultDir, '_vault.json'), renderVaultJson(githubUser, name));
+      copyFileSync(DEPLOY_TMPL, join(vaultDir, VAULT_DIRS.GITHUB_WORKFLOWS, WORKFLOW_FILES.DEPLOY));
+      writeFileSync(join(vaultDir, VAULT_FILES.VAULT_JSON), renderVaultJson(githubUser, name));
     }
 
     // [3/6] Git init + commit
