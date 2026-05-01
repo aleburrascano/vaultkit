@@ -4,6 +4,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Docs
+- **README refresh.** Reframed the lede so the value prop lands without presupposing Obsidian familiarity (one-line tagline + a paragraph that explains what Obsidian is, what a vault is, and what vaultkit adds on top). New `## What you'd use this for` section enumerates four concrete scenarios — personal knowledge base, team wiki, public reference, reading notebook. Merged the previously-separate `## What a vault is` and `## Vault structure` into one `## Anatomy of a vault` (file tree + capabilities table together). Promoted the Claude Code payoff sentence to the top of `## Using with Claude Code`. Added `.mcp-start.js` to the file tree (was missing). Everything past the new sections is preserved verbatim.
+
 ### Fixed
 - **Windows CI flake in [tests/lib/launcher-integration.test.ts](tests/lib/launcher-integration.test.ts).** The `afterEach` `rmSync(tmp, { recursive: true, force: true })` raced against spawned child processes still releasing file handles on GitHub Windows runners, surfacing as `EBUSY: resource busy or locked, rmdir`. Fix: 2-second retry budget (`maxRetries: 10, retryDelay: 200`) plus a try/catch on the cleanup itself — each test uses its own `mkdtempSync` so a residual leftover dir cannot leak into subsequent tests, and the runner reclaims `TMPDIR` at job end. Caught by the v2.4.0 Windows CI matrix (PR 6) firing on the first real run; v2.4.0 itself published cleanly via `release.yml` (ubuntu-latest), so the npm package is unaffected.
 

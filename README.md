@@ -1,20 +1,20 @@
 # vaultkit
 
-A package manager for Obsidian vaults — powered by GitHub and Claude Code.
+Make an Obsidian wiki searchable by Claude Code — yours, your team's, or someone else's.
 
-vaultkit lets you publish, discover, and connect to knowledge wikis the same way npm lets you publish and install packages. Each vault is a GitHub repo with a built-in MCP server. One command to connect, and it's immediately available as a tool in every Claude Code session — no configuration, no manual setup.
-
-**The ecosystem in three steps:**
-1. Someone publishes a vault (`vaultkit init`) — a structured Obsidian wiki, optionally with a public GitHub Pages site
-2. You connect to it (`vaultkit connect owner/repo`) — clones it locally and registers it as an MCP server in Claude Code
-3. Open any project in Claude Code — the vault's knowledge is instantly queryable, always up to date
-
-Connect as many vaults as you want. They live in your `~/vaults/` folder, each registered under its own MCP namespace, ready to query the moment you start a new chat.
+[Obsidian](https://obsidian.md) is a free Markdown note-taking app where a "vault" is just a folder of `.md` files on your disk. vaultkit takes that vault, backs it with a GitHub repo, and registers it as a Claude Code MCP server — so every Claude Code session in every project can full-text search and read your notes, with no per-project setup. Connect as many vaults as you want; each lives under its own MCP namespace and stays in sync with upstream automatically.
 
 ```bash
 npm install -g @aleburrascano/vaultkit
 vaultkit help
 ```
+
+## What you'd use this for
+
+- **Personal knowledge base.** A vault of research notes, papers, books you've read, recurring ideas. Open Claude Code on any project and your notes are queryable mid-conversation — no copy-paste, no "let me find that link."
+- **Team wiki.** A shared decision log, runbook collection, or product knowledge base lives in one GitHub repo. Every teammate's Claude Code can answer from it without anyone manually pasting context, and PRs gate every change.
+- **Public reference.** Publish a curated wiki for a domain you know well; others run `vaultkit connect owner/repo` and their Claude Code now has access too — like a knowledge graph anyone can subscribe to. Optional public Quartz site so non-Claude users can read it in a browser.
+- **Reading notebook.** Drop source PDFs/articles into `raw/`, write synthesis pages in `wiki/`, ask Claude to surface contradictions between sources or pull every quote on a topic.
 
 ## Commands
 
@@ -43,9 +43,34 @@ CHANGE OR REMOVE
 
 Every command supports `--help` / `-h` for detailed usage. Pass `--verbose` (or `-v`) before the args to get trace output. Pass `--version` to print the installed version + runtime info.
 
-## What a vault is
+**The ecosystem in three steps:** someone publishes a vault (`vaultkit init`), you connect to it (`vaultkit connect owner/repo`), then every Claude Code session in any project can query its contents — always against the latest merged content upstream.
 
-Each vault is an Obsidian wiki backed by a GitHub repo with:
+## Anatomy of a vault
+
+Each vault is an [Obsidian](https://obsidian.md) wiki backed by a GitHub repo. On disk it looks like this:
+
+```
+my-wiki/
+├── raw/              ← source material — immutable, never edit
+│   ├── articles/
+│   ├── books/
+│   ├── notes/
+│   ├── papers/
+│   ├── transcripts/
+│   └── assets/
+├── wiki/             ← your authored pages
+│   ├── concepts/
+│   ├── topics/
+│   ├── people/
+│   └── sources/
+├── index.md          ← one-line entry per page
+├── log.md            ← append-only operation log
+├── CLAUDE.md         ← instructions for your AI assistant
+├── .mcp-start.js     ← MCP server launcher (SHA-pinned, see Security)
+└── .quartz/          ← Quartz static site generator (only when publishing)
+```
+
+And each vault ships with these capabilities:
 
 | | |
 |---|---|
@@ -53,6 +78,8 @@ Each vault is an Obsidian wiki backed by a GitHub repo with:
 | **PR gating** | `main` is branch-protected — all changes go through pull requests |
 | **Duplicate check** | CI blocks PRs that add a source file whose name already exists in `raw/` |
 | **MCP server** | The vault is registered as a Claude Code MCP server so you can query it from any project |
+
+Vaults live in `~/vaults/` by default (override with `VAULTKIT_HOME` — see [Configuration](#configuration)).
 
 ## Prerequisites
 
@@ -112,31 +139,9 @@ vaultkit destroy my-wiki      # deletes local + GitHub repo (if you own it) + MC
 
 `destroy` checks ownership via `gh api repos/.../permissions.admin` first. If you're a collaborator and don't have admin rights, only the local clone and MCP registration are removed (effectively a `disconnect`).
 
-## Vault structure
-
-```
-my-wiki/
-├── raw/              ← source material — immutable, never edit
-│   ├── articles/
-│   ├── books/
-│   ├── notes/
-│   ├── papers/
-│   ├── transcripts/
-│   └── assets/
-├── wiki/             ← your authored pages
-│   ├── concepts/
-│   ├── topics/
-│   ├── people/
-│   └── sources/
-├── index.md          ← one-line entry per page
-├── log.md            ← append-only operation log
-├── CLAUDE.md         ← instructions for your AI assistant
-└── .quartz/          ← Quartz static site generator (only when publishing)
-```
-
 ## Using with Claude Code
 
-After `vaultkit init` or `vaultkit connect`, open any project in Claude Code — your wiki is immediately available:
+Open any project in Claude Code and your wiki is already there — full-text searchable, always synced to upstream, no per-project setup. The wiki shows up as a set of MCP tools:
 
 ```
 search_notes    full-text search across all wiki pages
@@ -146,7 +151,7 @@ get_tags        browse by tag
 ```
 
 Multiple wikis are available simultaneously under their own MCP namespaces:
-`mcp__my-wiki__search_notes`, `mcp__cooking-wiki__get_note`, etc.
+`mcp__my-wiki__search_notes`, `mcp__cooking-wiki__get_note`, etc. Ask Claude *"what do I know about quartz?"* in any project and it'll search your `obsidian` vault, your `cooking-wiki`, and any other vaults you've connected — all at once.
 
 ## Contributing to a wiki
 
