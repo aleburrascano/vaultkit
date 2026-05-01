@@ -154,3 +154,20 @@ export async function clone(repo: string, dest: string, { useGh = true }: CloneO
     await execa('git', ['clone', repo, dest]);
   }
 }
+
+/**
+ * Resolves the GitHub `owner/repo` slug from the `origin` remote of a
+ * local git checkout. Returns null if there is no origin or the URL is
+ * not a recognised GitHub form. Pure read; never throws.
+ *
+ * Uses the `-C dir` argv form (rather than the internal `git()` helper's
+ * `cwd:` option) to match the inline implementation that previously
+ * lived in destroy.ts and visibility.ts — preserves test argv mocks.
+ */
+export async function getRepoSlug(dir: string): Promise<string | null> {
+  const result = await execa('git', ['-C', dir, 'remote', 'get-url', 'origin'], { reject: false });
+  if (result.exitCode !== 0) return null;
+  const url = String(result.stdout ?? '').trim();
+  const m = url.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?\/?$/);
+  return m?.[1] ?? null;
+}

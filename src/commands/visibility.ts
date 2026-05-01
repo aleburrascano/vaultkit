@@ -6,7 +6,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { renderVaultJson } from '../lib/vault-templates.js';
 import { findTool } from '../lib/platform.js';
-import { add, commit, pushOrPr } from '../lib/git.js';
+import { add, commit, pushOrPr, getRepoSlug } from '../lib/git.js';
 import {
   getVisibility, isAdmin, getUserPlan,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
@@ -20,14 +20,6 @@ const DEPLOY_TMPL = join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
 
 export interface VisibilityOptions extends RunOptions {
   skipConfirm?: boolean;
-}
-
-async function resolveRepoSlug(dir: string): Promise<string | null> {
-  const result = await execa('git', ['-C', dir, 'remote', 'get-url', 'origin'], { reject: false });
-  if (result.exitCode !== 0) return null;
-  const url = String(result.stdout ?? '').trim();
-  const m = url.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?\/?$/);
-  return m?.[1] ?? null;
 }
 
 export async function run(
@@ -46,7 +38,7 @@ export async function run(
   const gh = await findTool('gh');
   if (!gh) throw new VaultkitError('TOOL_MISSING', 'GitHub CLI (gh) is required for vaultkit visibility.');
 
-  const repoSlug = await resolveRepoSlug(vault.dir);
+  const repoSlug = await getRepoSlug(vault.dir);
   if (!repoSlug) throw new VaultkitError('NOT_VAULT_LIKE', "Vault has no 'origin' remote — cannot determine GitHub repo.");
 
   const admin = await isAdmin(repoSlug).catch(() => false);

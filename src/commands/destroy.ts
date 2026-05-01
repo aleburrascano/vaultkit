@@ -4,6 +4,7 @@ import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
+import { getRepoSlug } from '../lib/git.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
@@ -13,14 +14,6 @@ export interface DestroyOptions extends RunOptions {
   skipConfirm?: boolean;
   skipMcp?: boolean;
   confirmName?: string;
-}
-
-async function resolveRepoSlug(dir: string): Promise<string | null> {
-  const result = await execa('git', ['-C', dir, 'remote', 'get-url', 'origin'], { reject: false });
-  if (result.exitCode !== 0) return null;
-  const url = String(result.stdout ?? '').trim();
-  const m = url.match(/github\.com[:/]([^/]+\/[^/.]+?)(\.git)?\/?$/);
-  return m?.[1] ?? null;
 }
 
 export async function run(
@@ -37,7 +30,7 @@ export async function run(
   }
 
   // Resolve GitHub repo
-  const repoSlug = vault.hasGitRepo() ? await resolveRepoSlug(vault.dir) : null;
+  const repoSlug = vault.hasGitRepo() ? await getRepoSlug(vault.dir) : null;
   let repoDeletable = false;
   let repoNote = '';
 
