@@ -17,8 +17,10 @@ vi.mock('../../src/lib/platform.js', async (importOriginal) => {
 
 import {
   runMcpAdd,
+  runMcpRemove,
   runMcpRepin,
   manualMcpAddCommand,
+  manualMcpRemoveCommand,
   manualMcpRepinCommands,
   findOrInstallClaude,
 } from '../../src/lib/mcp.js';
@@ -63,6 +65,34 @@ describe('runMcpAdd — security invariant', () => {
   });
 });
 
+describe('runMcpRemove', () => {
+  it('issues claude mcp remove with --scope user', async () => {
+    await runMcpRemove('/path/to/claude', 'MyVault');
+    expect(vi.mocked(execa)).toHaveBeenCalledWith(
+      '/path/to/claude',
+      ['mcp', 'remove', 'MyVault', '--scope', 'user'],
+      { reject: false },
+    );
+  });
+
+  it('returns { removed: true } when claude exits 0', async () => {
+    vi.mocked(execa).mockResolvedValueOnce({ exitCode: 0, stdout: '', stderr: '' } as never);
+    const result = await runMcpRemove('/c', 'V');
+    expect(result).toEqual({ removed: true });
+  });
+
+  it('returns { removed: false } when entry is not registered (non-zero exit)', async () => {
+    vi.mocked(execa).mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'not found' } as never);
+    const result = await runMcpRemove('/c', 'V');
+    expect(result).toEqual({ removed: false });
+  });
+
+  it('does not throw when claude reports a missing entry', async () => {
+    vi.mocked(execa).mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'not found' } as never);
+    await expect(runMcpRemove('/c', 'V')).resolves.toBeDefined();
+  });
+});
+
 describe('runMcpRepin', () => {
   it('removes existing entry then re-adds with new hash', async () => {
     await runMcpRepin('/path/to/claude', 'MyVault', '/p/.mcp-start.js', 'newhash');
@@ -85,6 +115,12 @@ describe('manualMcpAddCommand', () => {
   it('always includes --expected-sha256', () => {
     const cmd = manualMcpAddCommand('V', '/p', 'hashvalue');
     expect(cmd).toMatch(/--expected-sha256=hashvalue/);
+  });
+});
+
+describe('manualMcpRemoveCommand', () => {
+  it('produces a copy-pasteable command matching the runMcpRemove argv', () => {
+    expect(manualMcpRemoveCommand('MyVault')).toBe('claude mcp remove MyVault --scope user');
   });
 });
 
