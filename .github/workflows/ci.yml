@@ -18,6 +18,10 @@ jobs:
     timeout-minutes: 15
     strategy:
       fail-fast: false
+      # Serial — both runners hit the same test GH account, and parallel
+      # create/delete bursts trip GitHub's abuse heuristics. `max-parallel: 1`
+      # roughly doubles wall-clock but keeps the account in good standing.
+      max-parallel: 1
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
