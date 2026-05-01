@@ -4,6 +4,8 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-05-01
+
 ### Refactor (polish batch — 7 small items from the architectural review)
 - **Template path resolution centralized.** New `getLauncherTemplate()` and `getDeployTemplate()` helpers in [src/lib/platform.ts](src/lib/platform.ts) — one source of truth for the `'../../lib/<tmpl>'` offset that previously lived inline in three command files (`init.ts`, `update.ts`, `visibility.ts`). Same dev/post-build resolution semantics as before; removes a doc/path drift risk.
 - **`requireAuthGatedEligible(extraHint?)` extracted to [src/lib/github.ts](src/lib/github.ts).** The two callers (`init` and `visibility`) previously duplicated the `getUserPlan()` → free-plan throw pattern with slightly different messages. The optional `extraHint` preserves init's "Choose Public or Private instead" guidance without dragging the visibility caller into init's interactive context. Visibility test mocks updated to mock the helper directly (avoids the same-module `vi.mock` bypass when the internal `getUserPlan()` call lives in github.ts).
