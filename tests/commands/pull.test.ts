@@ -4,18 +4,11 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
 import { silent, arrayLogger } from '../helpers/logger.js';
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-pull-test-')); });
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
-
-function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, dir] of Object.entries(vaults)) {
-    mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 describe('pull command', () => {
   it('reports skipped vault when directory missing', async () => {

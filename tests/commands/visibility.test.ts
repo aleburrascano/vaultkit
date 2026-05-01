@@ -40,6 +40,7 @@ import {
   isAdmin, getVisibility, getUserPlan,
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
 } from '../../src/lib/github.js';
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 
@@ -78,13 +79,6 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function writeCfg(cfgPath: string, vaultDir: string, name: string = 'MyVault'): void {
-  const mcpServers = {
-    [name]: { command: 'node', args: [`${vaultDir}/.mcp-start.js`] },
-  };
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
-
 function makeVaultDir(name: string = 'MyVault'): string {
   const dir = join(tmp, name);
   mkdirSync(dir, { recursive: true });
@@ -118,7 +112,7 @@ describe('VI-2: invalid target mode', () => {
   it('throws on unknown mode', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     const { run } = await import('../../src/commands/visibility.js');
     await expect(run('MyVault', 'stealth', { cfgPath, log: silent })).rejects.toThrow(/invalid mode/i);
   });
@@ -141,7 +135,7 @@ describe('VI-4: gh not found', () => {
   it('throws when gh not installed', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(findTool).mockResolvedValue(null);
     const { run } = await import('../../src/commands/visibility.js');
     await expect(run('MyVault', 'public', { cfgPath, log: silent })).rejects.toThrow(/gh.*required/i);
@@ -154,7 +148,7 @@ describe('VI-5: no origin remote', () => {
   it('throws when git remote fails', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(execa).mockResolvedValue({ exitCode: 1, stdout: '', stderr: 'no remote' } as never);
     const { run } = await import('../../src/commands/visibility.js');
     await expect(run('MyVault', 'public', { cfgPath, log: silent })).rejects.toThrow(/no.*origin/i);
@@ -167,7 +161,7 @@ describe('VI-6: non-admin', () => {
   it('throws when user is not admin', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(isAdmin).mockResolvedValue(false);
     vi.mocked(getVisibility).mockResolvedValue('public');
     const { run } = await import('../../src/commands/visibility.js');
@@ -181,7 +175,7 @@ describe('VI-7: already at target', () => {
   it('logs "already <target>" and returns', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     // Already public, pages public
     vi.mocked(getVisibility).mockResolvedValue('public');
     vi.mocked(pagesExist).mockResolvedValue(true);
@@ -203,7 +197,7 @@ describe('VI-8: private → public, enabling Pages', () => {
   it('flips repo to public and enables Pages', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('private');
     vi.mocked(pagesExist).mockResolvedValue(false);
     // deploy.yml already exists to avoid workflow commit path
@@ -227,7 +221,7 @@ describe('VI-9: public → private, disables Pages', () => {
   it('flips repo to private and disables Pages', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('public');
     vi.mocked(pagesExist).mockResolvedValue(true);
     vi.mocked(getPagesVisibility).mockResolvedValue('public');
@@ -249,7 +243,7 @@ describe('VI-10: auth-gated on free plan', () => {
   it('throws because Pages private requires Pro', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('public');
     vi.mocked(pagesExist).mockResolvedValue(false);
     vi.mocked(getUserPlan).mockResolvedValue('free');
@@ -265,7 +259,7 @@ describe('VI-11: auth-gated on Pro plan', () => {
   it('enables Pages with private visibility', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('private');
     vi.mocked(pagesExist).mockResolvedValue(false);
     vi.mocked(getUserPlan).mockResolvedValue('pro');
@@ -285,7 +279,7 @@ describe('VI-12: user declines', () => {
   it('logs aborted and makes no changes', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('private');
     vi.mocked(pagesExist).mockResolvedValue(false);
     vi.mocked(confirm).mockResolvedValueOnce(false);
@@ -303,7 +297,7 @@ describe('VI-13: deploy added, pushed via PR', () => {
   it('logs PR branch warning', async () => {
     const vaultDir = makeVaultDir();
     const cfgPath = join(tmp, '.claude.json');
-    writeCfg(cfgPath, vaultDir);
+    writeCfg(cfgPath, { MyVault: vaultDir });
     vi.mocked(getVisibility).mockResolvedValue('private');
     vi.mocked(pagesExist).mockResolvedValue(false);
     vi.mocked(pushOrPr).mockResolvedValue({ mode: 'pr', branch: 'vaultkit-pages-1234567890' });

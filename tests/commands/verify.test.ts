@@ -23,8 +23,7 @@ vi.mock('../../src/lib/platform.js', async (importOriginal) => {
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { findTool } from '../../src/lib/platform.js';
-
-interface VaultEntry { dir: string; hash: string | null }
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 
@@ -38,16 +37,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
-
-function writeCfg(cfgPath: string, vaults: Record<string, VaultEntry>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, { dir, hash }] of Object.entries(vaults)) {
-    const args = [`${dir}/.mcp-start.js`];
-    if (hash) args.push(`--expected-sha256=${hash}`);
-    mcpServers[name] = { command: 'node', args };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 function computeHash(content: string): string {
   return createHash('sha256').update(content).digest('hex');

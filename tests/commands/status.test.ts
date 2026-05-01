@@ -11,8 +11,7 @@ vi.mock('../../src/lib/git.js', async (importOriginal) => {
 });
 
 import { getStatus } from '../../src/lib/git.js';
-
-interface VaultEntry { dir: string; hash: string | null }
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 
@@ -24,16 +23,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
-
-function writeCfg(cfgPath: string, vaults: Record<string, VaultEntry>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, { dir, hash }] of Object.entries(vaults)) {
-    const args = [`${dir}/.mcp-start.js`];
-    if (hash) args.push(`--expected-sha256=${hash}`);
-    mcpServers[name] = { command: 'node', args };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 function makeGitRepo(dir: string): void {
   mkdirSync(join(dir, '.git'), { recursive: true });

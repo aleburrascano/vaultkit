@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Vault, validateName, isVaultLike, sha256 } from '../../src/lib/vault.js';
 import { isVaultkitError } from '../../src/lib/errors.js';
+import { writeCfg } from '../helpers/registry.js';
 import {
   renderClaudeMd,
   renderReadme,
@@ -67,16 +68,9 @@ describe('validateName', () => {
 // ── Vault.requireFromName ─────────────────────────────────────────────────────
 
 describe('Vault.requireFromName', () => {
-  function writeCfg(servers: Record<string, { command: string; args: unknown[] }>): string {
-    const cfgPath = join(tmp, '.claude.json');
-    writeFileSync(cfgPath, JSON.stringify({ mcpServers: servers }), 'utf8');
-    return cfgPath;
-  }
-
   it('returns a Vault when the name is registered', async () => {
-    const cfgPath = writeCfg({
-      MyVault: { command: 'node', args: [join(tmp, 'MyVault', '.mcp-start.js'), '--expected-sha256=abc123'] },
-    });
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, { MyVault: { dir: join(tmp, 'MyVault'), hash: 'abc123' } });
     const vault = await Vault.requireFromName('MyVault', cfgPath);
     expect(vault.name).toBe('MyVault');
     expect(vault.dir).toBe(join(tmp, 'MyVault'));
@@ -84,7 +78,8 @@ describe('Vault.requireFromName', () => {
   });
 
   it('throws VaultkitError(NOT_REGISTERED) when the name is not registered', async () => {
-    const cfgPath = writeCfg({});
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, {});
     try {
       await Vault.requireFromName('Missing', cfgPath);
       throw new Error('should have thrown');
@@ -98,7 +93,8 @@ describe('Vault.requireFromName', () => {
   });
 
   it('throws VaultkitError(INVALID_NAME) for an invalid name (validation runs before registry lookup)', async () => {
-    const cfgPath = writeCfg({});
+    const cfgPath = join(tmp, '.claude.json');
+    writeCfg(cfgPath, {});
     try {
       await Vault.requireFromName('owner/repo', cfgPath);
       throw new Error('should have thrown');

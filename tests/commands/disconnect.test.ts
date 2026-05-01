@@ -3,18 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { silent } from '../helpers/logger.js';
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-disconnect-test-')); });
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
-
-function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, dir] of Object.entries(vaults)) {
-    mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 function makeVaultDir(dir: string): void {
   mkdirSync(dir, { recursive: true });

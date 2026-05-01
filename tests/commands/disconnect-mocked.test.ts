@@ -17,6 +17,7 @@ vi.mock('../../src/lib/platform.js', async (importOriginal) => {
 import { input } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { findTool } from '../../src/lib/platform.js';
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 
@@ -30,14 +31,6 @@ beforeEach(() => {
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
-
-function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, dir] of Object.entries(vaults)) {
-    mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 function makeVaultDir(dir: string): void {
   mkdirSync(dir, { recursive: true });

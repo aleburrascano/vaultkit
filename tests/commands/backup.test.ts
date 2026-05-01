@@ -3,18 +3,11 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execa } from 'execa';
+import { writeCfg } from '../helpers/registry.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-backup-test-')); });
 afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
-
-function writeCfg(cfgPath: string, vaults: Record<string, string>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, dir] of Object.entries(vaults)) {
-    mcpServers[name] = { command: 'node', args: [`${dir}/.mcp-start.js`] };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
 
 async function makeCommittedRepo(dir: string): Promise<void> {
   await execa('git', ['init', '-b', 'main', dir]);

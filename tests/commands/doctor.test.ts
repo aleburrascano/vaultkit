@@ -16,8 +16,8 @@ vi.mock('execa', async (importOriginal) => {
 
 import { findTool } from '../../src/lib/platform.js';
 import { execa } from 'execa';
-
-interface VaultEntry { dir: string; hash: string | null }
+import { writeCfg } from '../helpers/registry.js';
+import { mockGitConfig } from '../helpers/git.js';
 
 let tmp: string;
 
@@ -31,27 +31,8 @@ afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-function writeCfg(cfgPath: string, vaults: Record<string, VaultEntry>): void {
-  const mcpServers: Record<string, { command: string; args: string[] }> = {};
-  for (const [name, { dir, hash }] of Object.entries(vaults)) {
-    const args = [`${dir}/.mcp-start.js`];
-    if (hash) args.push(`--expected-sha256=${hash}`);
-    mcpServers[name] = { command: 'node', args };
-  }
-  writeFileSync(cfgPath, JSON.stringify({ mcpServers }), 'utf8');
-}
-
 function mockAllToolsFound(): void {
   vi.mocked(findTool).mockImplementation(async (name: string) => `/usr/bin/${name}`);
-}
-
-function mockGitConfig(name: string = 'Test User', email: string = 'test@example.com'): void {
-  vi.mocked(execa).mockImplementation((async (cmd: string, args?: readonly string[]) => {
-    if (cmd === 'git' && args?.[0] === 'auth') return { exitCode: 0, stdout: '', stderr: '' };
-    if (args?.includes('user.name')) return { exitCode: 0, stdout: name, stderr: '' };
-    if (args?.includes('user.email')) return { exitCode: 0, stdout: email, stderr: '' };
-    return { exitCode: 0, stdout: '', stderr: '' };
-  }) as never);
 }
 
 function mockGhAuth(authenticated: boolean = true): void {
