@@ -12,7 +12,7 @@ import {
   repoUrl,
 } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
+import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
@@ -34,8 +34,7 @@ export async function run(
     throw new VaultkitError('UNRECOGNIZED_INPUT', `Invalid mode '${target}'. Choose one of: public, private, auth-gated.`);
   }
 
-  const vault = await Vault.tryFromName(name, cfgPath);
-  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`);
+  const vault = await Vault.requireFromName(name, cfgPath);
 
   if (!await findTool('gh')) {
     throw new VaultkitError('TOOL_MISSING', 'GitHub CLI (gh) is required for vaultkit visibility.');

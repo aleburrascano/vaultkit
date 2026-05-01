@@ -5,7 +5,6 @@ import { getAllVaults } from '../lib/registry.js';
 import { getStatus } from '../lib/git.js';
 import { Vault } from '../lib/vault.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export async function run(
@@ -14,10 +13,7 @@ export async function run(
 ): Promise<void> {
   if (name) {
     // Single-vault detailed mode
-    const vault = await Vault.tryFromName(name, cfgPath);
-    if (!vault) {
-      throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`);
-    }
+    const vault = await Vault.requireFromName(name, cfgPath);
     if (!vault.hasGitRepo()) {
       throw new Error(`${vault.dir} is not a git repository.`);
     }
