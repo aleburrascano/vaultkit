@@ -63,6 +63,151 @@ async function installGh(log: Logger, skipInstallCheck: boolean = false): Promis
   }
 }
 
+// ─── Phase helpers — keep init's run() readable as a sequence ─────────────
+
+async function ensureGhAuth(ghPath: string, log: Logger): Promise<void> {
+  const result = await execa(ghPath, ['auth', 'status'], { reject: false });
+  if (result.exitCode !== 0) {
+    log.info('  GitHub authentication required — a browser window will open...');
+    await execa(ghPath, ['auth', 'login'], { stdio: 'inherit' });
+  }
+}
+
+async function ensureGitConfig(gitNameOpt: string | undefined, gitEmailOpt: string | undefined): Promise<void> {
+  const nameResult = await execa('git', ['config', 'user.name'], { reject: false });
+  const emailResult = await execa('git', ['config', 'user.email'], { reject: false });
+  if (!String(nameResult.stdout ?? '').trim()) {
+    const n = gitNameOpt ?? await input({ message: 'Enter your name for git commits:' });
+    await execa('git', ['config', '--global', 'user.name', n]);
+  }
+  if (!String(emailResult.stdout ?? '').trim()) {
+    const e = gitEmailOpt ?? await input({ message: 'Enter your email for git commits:' });
+    await execa('git', ['config', '--global', 'user.email', e]);
+  }
+}
+
+interface PublishConfig {
+  publishMode: PublishMode;
+  repoVisibility: 'public' | 'private';
+  enablePages: boolean;
+  pagesPrivate: boolean;
+  writeDeploy: boolean;
+}
+
+async function selectPublishMode(publishModeOpt: PublishMode | undefined, ghPath: string): Promise<PublishConfig> {
+  if (publishModeOpt !== undefined && !['private', 'public', 'auth-gated'].includes(publishModeOpt)) {
+    throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: private, public, auth-gated`);
+  }
+  const publishMode: PublishMode = publishModeOpt ?? await select<PublishMode>({
+    message: 'Publish this vault as a public knowledge site?',
+    choices: [
+      { name: 'Private repo, notes-only (no Pages, no public URL)  [default]', value: 'private' },
+      { name: 'Public repo + public Quartz site', value: 'public' },
+      { name: 'Private repo + auth-gated Pages site (GitHub Pro+ only)', value: 'auth-gated' },
+    ],
+  });
+
+  if (publishMode === 'auth-gated') {
+    const planResult = await execa(ghPath, ['api', 'user', '--jq', '.plan.name'], { reject: false });
+    const plan = String(planResult.stdout ?? '').trim() || 'free';
+    if (plan === 'free') {
+      throw new Error(`auth-gated Pages requires GitHub Pro+ (you're on Free).\n  Choose Public or Private instead.`);
+    }
+  }
+
+  return {
+    publishMode,
+    repoVisibility: publishMode === 'public' ? 'public' : 'private',
+    enablePages: publishMode !== 'private',
+    pagesPrivate: publishMode === 'auth-gated',
+    writeDeploy: publishMode !== 'private',
+  };
+}
+
+async function getGithubUser(ghPath: string): Promise<string> {
+  const result = await execa(ghPath, ['api', 'user', '--jq', '.login'], { reject: false });
+  const login = String(result.stdout ?? '').trim();
+  if (!login) throw new Error('Could not fetch your GitHub username. Run: gh auth status');
+  return login;
+}
+
+async function createRemoteRepo(ghPath: string, vaultDir: string, name: string, githubUser: string, repoVisibility: 'public' | 'private'): Promise<void> {
+  await execa(ghPath, ['repo', 'create', name, `--${repoVisibility}`]);
+  await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', `https://github.com/${githubUser}/${name}.git`]);
+}
+
+async function setupGitHubPages(ghPath: string, githubUser: string, name: string, pagesPrivate: boolean, log: Logger): Promise<void> {
+  const pagesResult = await execa(ghPath, [
+    'api', `repos/${githubUser}/${name}/pages`,
+    '--method', 'POST', '-f', 'build_type=workflow',
+  ], { reject: false });
+  if (pagesResult.exitCode !== 0) {
+    log.info(`  Warning: Could not auto-enable GitHub Pages.`);
+    log.info(`  Enable manually: https://github.com/${githubUser}/${name}/settings/pages`);
+    return;
+  }
+  if (pagesPrivate) {
+    const privResult = await execa(ghPath, [
+      'api', `repos/${githubUser}/${name}/pages`,
+      '--method', 'PUT', '-f', 'visibility=private',
+    ], { reject: false });
+    if (privResult.exitCode !== 0) {
+      log.info(`  Warning: Could not set Pages to private — may be publicly accessible.`);
+    }
+  }
+}
+
+async function setupBranchProtection(ghPath: string, githubUser: string, name: string, log: Logger): Promise<void> {
+  const protectionBody = JSON.stringify({
+    required_status_checks: null,
+    enforce_admins: false,
+    required_pull_request_reviews: { required_approving_review_count: 1, dismiss_stale_reviews: false },
+    restrictions: null,
+  });
+  const result = await execa(ghPath, [
+    'api', `repos/${githubUser}/${name}/branches/main/protection`,
+    '--method', 'PUT', '--input', '-',
+  ], { input: protectionBody, reject: false });
+  if (result.exitCode !== 0) {
+    log.info(`  Note: Branch protection not applied (may require a paid plan for private repos).`);
+    log.info(`  Set up manually: https://github.com/${githubUser}/${name}/settings/branches`);
+  }
+}
+
+/** Returns true if the MCP server was successfully registered (caller uses for rollback). */
+async function registerMcpForVault(vaultDir: string, name: string, skipInstallCheck: boolean, log: Logger): Promise<boolean> {
+  const launcherPath = join(vaultDir, VAULT_FILES.LAUNCHER);
+  const hash = await sha256(launcherPath);
+  const claudePath = await findOrInstallClaude({
+    log,
+    promptInstall: () => skipInstallCheck
+      ? Promise.resolve(true)
+      : confirm({ message: 'Claude Code CLI not found. Install it now?', default: false }),
+  });
+
+  if (claudePath) {
+    log.info(`Registering MCP server: ${name}`);
+    await runMcpAdd(claudePath, name, launcherPath, hash);
+    return true;
+  }
+  log.info(`  Note: Claude Code CLI not installed — skipping MCP registration.`);
+  log.info(`  Once installed, run:`);
+  log.info(`  ${manualMcpAddCommand(name, launcherPath, hash)}`);
+  return false;
+}
+
+function printDoneSummary(name: string, githubUser: string, vaultDir: string, publishMode: PublishMode, baseUrl: string, log: Logger): void {
+  log.info('');
+  log.info('Done.');
+  log.info(`  Repo:  https://github.com/${githubUser}/${name}`);
+  if (publishMode === 'public') {
+    log.info(`  Site:  https://${baseUrl}  (live after CI finishes, ~1 min)`);
+  } else if (publishMode === 'auth-gated') {
+    log.info(`  Site:  https://${baseUrl}  (auth-gated — visible only to authorized GitHub users)`);
+  }
+  log.info(`  Vault: ${vaultDir}`);
+}
+
 export async function run(
   name: string,
   {
@@ -96,61 +241,17 @@ export async function run(
     }
   }
 
-  // Auth
-  const authResult = await execa(ghPath, ['auth', 'status'], { reject: false });
-  if (authResult.exitCode !== 0) {
-    log.info('  GitHub authentication required — a browser window will open...');
-    await execa(ghPath, ['auth', 'login'], { stdio: 'inherit' });
-  }
+  await ensureGhAuth(ghPath, log);
+  await ensureGitConfig(gitNameOpt, gitEmailOpt);
 
-  // Git user config
-  const gitNameResult = await execa('git', ['config', 'user.name'], { reject: false });
-  const gitEmailResult = await execa('git', ['config', 'user.email'], { reject: false });
-  const gitName = String(gitNameResult.stdout ?? '').trim();
-  const gitEmail = String(gitEmailResult.stdout ?? '').trim();
-  if (!gitName) {
-    const n = gitNameOpt ?? await input({ message: 'Enter your name for git commits:' });
-    await execa('git', ['config', '--global', 'user.name', n]);
-  }
-  if (!gitEmail) {
-    const e = gitEmailOpt ?? await input({ message: 'Enter your email for git commits:' });
-    await execa('git', ['config', '--global', 'user.email', e]);
-  }
-
-  // Publish mode
   log.info('');
-  if (publishModeOpt !== undefined && !['private', 'public', 'auth-gated'].includes(publishModeOpt)) {
-    throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: private, public, auth-gated`);
-  }
-  const publishMode: PublishMode = publishModeOpt ?? await select<PublishMode>({
-    message: 'Publish this vault as a public knowledge site?',
-    choices: [
-      { name: 'Private repo, notes-only (no Pages, no public URL)  [default]', value: 'private' },
-      { name: 'Public repo + public Quartz site', value: 'public' },
-      { name: 'Private repo + auth-gated Pages site (GitHub Pro+ only)', value: 'auth-gated' },
-    ],
-  });
-
-  const repoVisibility = publishMode === 'public' ? 'public' : 'private';
-  const enablePages = publishMode !== 'private';
-  const pagesPrivate = publishMode === 'auth-gated';
-  const writeDeploy = publishMode !== 'private';
-
-  if (publishMode === 'auth-gated') {
-    const planResult = await execa(ghPath, ['api', 'user', '--jq', '.plan.name'], { reject: false });
-    const plan = String(planResult.stdout ?? '').trim() || 'free';
-    if (plan === 'free') {
-      throw new Error(`auth-gated Pages requires GitHub Pro+ (you're on Free).\n  Choose Public or Private instead.`);
-    }
-  }
+  const { publishMode, repoVisibility, enablePages, pagesPrivate, writeDeploy } =
+    await selectPublishMode(publishModeOpt, ghPath);
 
   mkdirSync(root, { recursive: true });
   if (existsSync(vaultDir)) throw new Error(`${vaultDir} already exists.`);
 
-  const userResult = await execa(ghPath, ['api', 'user', '--jq', '.login'], { reject: false });
-  const githubUser = String(userResult.stdout ?? '').trim();
-  if (!githubUser) throw new Error('Could not fetch your GitHub username. Run: gh auth status');
-
+  const githubUser = await getGithubUser(ghPath);
   const baseUrl = `${githubUser}.github.io/${name}`;
 
   let createdDir = false;
@@ -158,16 +259,13 @@ export async function run(
   let registeredMcp = false;
 
   try {
-    // [2/6] Create vault
+    // [2/6] Create vault layout
     log.info(`\n[2/6] Creating vault: ${name} (${publishMode})`);
     mkdirSync(vaultDir, { recursive: true });
     createdDir = true;
 
-    // Directory tree + canonical layout files
     createDirectoryTree(vaultDir);
     writeLayoutFiles(vaultDir, { name, siteUrl: enablePages ? baseUrl : '' }, CANONICAL_LAYOUT_FILES);
-
-    // Launcher (byte-immutable, copied verbatim from the template)
     copyFileSync(TMPL_PATH, join(vaultDir, VAULT_FILES.LAUNCHER));
 
     if (writeDeploy) {
@@ -175,7 +273,7 @@ export async function run(
       writeFileSync(join(vaultDir, VAULT_FILES.VAULT_JSON), renderVaultJson(githubUser, name));
     }
 
-    // [3/6] Git init + commit
+    // [3/6] Git init + initial commit
     log.info('[3/6] Committing initial files...');
     await execa('git', ['init', vaultDir]);
     await execa('git', ['-C', vaultDir, 'branch', '-M', 'main'], { reject: false });
@@ -184,81 +282,26 @@ export async function run(
 
     // [4/6] GitHub repo
     log.info(`[4/6] Creating GitHub repo: ${name} (${repoVisibility})...`);
-    await execa(ghPath, ['repo', 'create', name, `--${repoVisibility}`]);
-    await execa('git', ['-C', vaultDir, 'remote', 'add', 'origin', `https://github.com/${githubUser}/${name}.git`]);
+    await createRemoteRepo(ghPath, vaultDir, name, githubUser, repoVisibility);
     createdRepo = true;
 
     // [5/6] Pages + push
     if (enablePages) {
       log.info('[5/6] Enabling Pages and pushing...');
-      const pagesResult = await execa(ghPath, [
-        'api', `repos/${githubUser}/${name}/pages`,
-        '--method', 'POST', '-f', 'build_type=workflow',
-      ], { reject: false });
-      if (pagesResult.exitCode !== 0) {
-        log.info(`  Warning: Could not auto-enable GitHub Pages.`);
-        log.info(`  Enable manually: https://github.com/${githubUser}/${name}/settings/pages`);
-      } else if (pagesPrivate) {
-        const privResult = await execa(ghPath, [
-          'api', `repos/${githubUser}/${name}/pages`,
-          '--method', 'PUT', '-f', 'visibility=private',
-        ], { reject: false });
-        if (privResult.exitCode !== 0) {
-          log.info(`  Warning: Could not set Pages to private — may be publicly accessible.`);
-        }
-      }
+      await setupGitHubPages(ghPath, githubUser, name, pagesPrivate, log);
     } else {
       log.info('[5/6] Pushing (no Pages — notes-only vault)...');
     }
-
     await execa('git', ['-C', vaultDir, 'push', '-u', 'origin', 'main']);
 
     // [6/6] Branch protection
     log.info('[6/6] Protecting main branch...');
-    const protectionBody = JSON.stringify({
-      required_status_checks: null,
-      enforce_admins: false,
-      required_pull_request_reviews: { required_approving_review_count: 1, dismiss_stale_reviews: false },
-      restrictions: null,
-    });
-    const protResult = await execa(ghPath, [
-      'api', `repos/${githubUser}/${name}/branches/main/protection`,
-      '--method', 'PUT', '--input', '-',
-    ], { input: protectionBody, reject: false });
-    if (protResult.exitCode !== 0) {
-      log.info(`  Note: Branch protection not applied (may require a paid plan for private repos).`);
-      log.info(`  Set up manually: https://github.com/${githubUser}/${name}/settings/branches`);
-    }
+    await setupBranchProtection(ghPath, githubUser, name, log);
 
     // MCP registration
-    const launcherPath = join(vaultDir, '.mcp-start.js');
-    const hash = await sha256(launcherPath);
-    const claudePath = await findOrInstallClaude({
-      log,
-      promptInstall: () => skipInstallCheck
-        ? Promise.resolve(true)
-        : confirm({ message: 'Claude Code CLI not found. Install it now?', default: false }),
-    });
+    registeredMcp = await registerMcpForVault(vaultDir, name, skipInstallCheck, log);
 
-    if (claudePath) {
-      log.info(`Registering MCP server: ${name}`);
-      await runMcpAdd(claudePath, name, launcherPath, hash);
-      registeredMcp = true;
-    } else {
-      log.info(`  Note: Claude Code CLI not installed — skipping MCP registration.`);
-      log.info(`  Once installed, run:`);
-      log.info(`  ${manualMcpAddCommand(name, launcherPath, hash)}`);
-    }
-
-    log.info('');
-    log.info('Done.');
-    log.info(`  Repo:  https://github.com/${githubUser}/${name}`);
-    if (publishMode === 'public') {
-      log.info(`  Site:  https://${baseUrl}  (live after CI finishes, ~1 min)`);
-    } else if (publishMode === 'auth-gated') {
-      log.info(`  Site:  https://${baseUrl}  (auth-gated — visible only to authorized GitHub users)`);
-    }
-    log.info(`  Vault: ${vaultDir}`);
+    printDoneSummary(name, githubUser, vaultDir, publishMode, baseUrl, log);
 
   } catch (err) {
     // Transactional rollback
