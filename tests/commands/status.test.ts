@@ -232,7 +232,7 @@ describe('S-10: single-vault mode — not registered', () => {
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
 
     const { run } = await import('../../src/commands/status.js');
-    await expect(run('UnknownVault', { cfgPath, log: silent })).rejects.toThrow(/not registered/i);
+    await expect(run('UnknownVault', { cfgPath, log: silent })).rejects.toThrow(/not a registered vault/i);
   });
 });
 

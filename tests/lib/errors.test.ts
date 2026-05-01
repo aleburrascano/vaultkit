@@ -3,6 +3,7 @@ import {
   VaultkitError,
   isVaultkitError,
   EXIT_CODES,
+  DEFAULT_MESSAGES,
   type VaultkitErrorCode,
 } from '../../src/lib/errors.js';
 
@@ -79,5 +80,31 @@ describe('EXIT_CODES', () => {
       expect(code).toBeGreaterThanOrEqual(2);
       expect(code).toBeLessThanOrEqual(12);
     }
+  });
+});
+
+describe('DEFAULT_MESSAGES', () => {
+  it('provides a message for every error code', () => {
+    const expectedCodes: VaultkitErrorCode[] = [
+      'INVALID_NAME', 'NOT_REGISTERED', 'ALREADY_REGISTERED',
+      'NOT_VAULT_LIKE', 'HASH_MISMATCH', 'AUTH_REQUIRED',
+      'PERMISSION_DENIED', 'TOOL_MISSING', 'NETWORK_TIMEOUT',
+      'UNRECOGNIZED_INPUT', 'PARTIAL_FAILURE',
+    ];
+    for (const code of expectedCodes) {
+      expect(DEFAULT_MESSAGES[code], `missing message for ${code}`).toBeTruthy();
+    }
+  });
+
+  it('formats sensibly when prefixed with a subject', () => {
+    // Pattern: `"${name}" ${DEFAULT_MESSAGES.X}` should read as a sentence.
+    expect(`"MyVault" ${DEFAULT_MESSAGES.NOT_REGISTERED}`)
+      .toBe('"MyVault" is not a registered vault.');
+    expect(`"MyVault" ${DEFAULT_MESSAGES.ALREADY_REGISTERED}`)
+      .toBe('"MyVault" is already registered.');
+  });
+
+  it('NOT_REGISTERED still matches the legacy /not a registered/i regex tests use', () => {
+    expect(DEFAULT_MESSAGES.NOT_REGISTERED).toMatch(/not a registered/i);
   });
 });

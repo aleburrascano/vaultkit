@@ -5,7 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError } from '../lib/errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface DisconnectOptions extends RunOptions {
@@ -20,7 +20,7 @@ export async function run(
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) {
-    throw new VaultkitError('NOT_REGISTERED', `"${name}" is not registered.\nRun 'vaultkit status' to see what's registered.`);
+    throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}\nRun 'vaultkit status' to see what's registered.`);
   }
 
   if (vault.existsOnDisk() && !vault.isVaultLike()) {

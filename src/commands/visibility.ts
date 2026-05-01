@@ -12,7 +12,7 @@ import {
   enablePages, setPagesVisibility, disablePages, pagesExist, getPagesVisibility,
 } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError } from '../lib/errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -34,7 +34,7 @@ export async function run(
   }
 
   const vault = await Vault.tryFromName(name, cfgPath);
-  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" is not a registered vault.`);
+  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`);
 
   const gh = await findTool('gh');
   if (!gh) throw new VaultkitError('TOOL_MISSING', 'GitHub CLI (gh) is required for vaultkit visibility.');

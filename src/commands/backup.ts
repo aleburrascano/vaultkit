@@ -5,7 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { archiveZip } from '../lib/git.js';
 import { vaultsRoot } from '../lib/platform.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError } from '../lib/errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface BackupOptions extends RunOptions {
@@ -17,7 +17,7 @@ export async function run(
   { cfgPath, backupsDir, log = new ConsoleLogger() }: BackupOptions = {},
 ): Promise<string> {
   const vault = await Vault.tryFromName(name, cfgPath);
-  if (!vault) throw new VaultkitError('NOT_REGISTERED', `Vault "${name}" is not registered.`);
+  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`);
 
   if (!vault.hasGitRepo()) {
     throw new Error(`${vault.dir} is not a git repository.`);

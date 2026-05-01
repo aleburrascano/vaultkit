@@ -36,7 +36,7 @@ describe('backup command', () => {
     const cfgPath = join(tmp, '.claude.json');
     writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
     const { run } = await import('../../src/commands/backup.js');
-    await expect(run('Unknown', { cfgPath, backupsDir: tmp })).rejects.toThrow(/not registered/i);
+    await expect(run('Unknown', { cfgPath, backupsDir: tmp })).rejects.toThrow(/not a registered vault/i);
   });
 
   it('creates a zip backup of a vault', async () => {

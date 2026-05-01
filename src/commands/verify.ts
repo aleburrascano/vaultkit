@@ -4,7 +4,7 @@ import { Vault, sha256 } from '../lib/vault.js';
 import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError } from '../lib/errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface VerifyOptions extends RunOptions {
@@ -16,7 +16,7 @@ export async function run(
   { cfgPath, yes = false, log = new ConsoleLogger() }: VerifyOptions = {},
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
-  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" is not a registered vault.`);
+  if (!vault) throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`);
 
   if (!vault.hasLauncher()) {
     throw new Error(`${vault.launcherPath} does not exist.\n  Run 'vaultkit update ${name}' to install the launcher.`);

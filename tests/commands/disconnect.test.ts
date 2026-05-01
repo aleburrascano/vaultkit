@@ -37,7 +37,7 @@ describe('disconnect command', () => {
     const { run } = await import('../../src/commands/disconnect.js');
     await expect(
       run('Unknown', { cfgPath, skipConfirm: true })
-    ).rejects.toThrow(/not registered/i);
+    ).rejects.toThrow(/not a registered vault/i);
   });
 
   it('throws when directory does not look like a vault', async () => {

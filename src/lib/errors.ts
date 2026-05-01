@@ -55,3 +55,27 @@ export const EXIT_CODES: Record<VaultkitErrorCode, number> = {
   UNRECOGNIZED_INPUT: 11,
   PARTIAL_FAILURE: 12,
 };
+
+/**
+ * Default human-readable error text per code. Use these as a base and
+ * append command-specific context where helpful. Prevents wording drift
+ * across the 3+ throw sites that previously phrased the same concept
+ * differently (e.g. "is not a registered vault" / "is not registered").
+ *
+ * Convention: each phrase is a sentence fragment that completes naturally
+ * after the subject (e.g. `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}`
+ * reads as `"MyVault" is not a registered vault.`).
+ */
+export const DEFAULT_MESSAGES: Record<VaultkitErrorCode, string> = {
+  INVALID_NAME: 'is not a valid vault name.',
+  NOT_REGISTERED: 'is not a registered vault.',
+  ALREADY_REGISTERED: 'is already registered.',
+  NOT_VAULT_LIKE: 'does not look like a vaultkit vault.',
+  HASH_MISMATCH: 'launcher SHA-256 differs from the pinned hash.',
+  AUTH_REQUIRED: 'requires GitHub authentication.',
+  PERMISSION_DENIED: 'requires admin permissions on the remote repo.',
+  TOOL_MISSING: 'requires a CLI tool that is not installed.',
+  NETWORK_TIMEOUT: 'timed out waiting for a network operation.',
+  UNRECOGNIZED_INPUT: 'is not in a recognized format.',
+  PARTIAL_FAILURE: 'partially failed — some operations did not complete.',
+};

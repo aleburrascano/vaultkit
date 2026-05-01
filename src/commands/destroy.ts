@@ -7,7 +7,7 @@ import { findTool } from '../lib/platform.js';
 import { getRepoSlug } from '../lib/git.js';
 import { isAdmin, ensureDeleteRepoScope } from '../lib/github.js';
 import { ConsoleLogger } from '../lib/logger.js';
-import { VaultkitError } from '../lib/errors.js';
+import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface DestroyOptions extends RunOptions {
@@ -22,7 +22,7 @@ export async function run(
 ): Promise<void> {
   const vault = await Vault.tryFromName(name, cfgPath);
   if (!vault) {
-    throw new VaultkitError('NOT_REGISTERED', `"${name}" is not a registered vault.\nRun 'vaultkit status' to see what's registered.\nIf you have an orphaned directory, remove it manually.`);
+    throw new VaultkitError('NOT_REGISTERED', `"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}\nRun 'vaultkit status' to see what's registered.\nIf you have an orphaned directory, remove it manually.`);
   }
 
   if (vault.existsOnDisk() && !vault.isVaultLike()) {
