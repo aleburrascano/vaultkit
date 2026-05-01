@@ -1,9 +1,9 @@
 import { rmSync } from 'node:fs';
 import { input } from '@inquirer/prompts';
-import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
+import { runMcpRemove, manualMcpRemoveCommand } from '../lib/mcp.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
@@ -50,10 +50,10 @@ export async function run(
     const claudePath = await findTool('claude');
     if (claudePath) {
       log.info('Removing MCP server...');
-      await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
+      await runMcpRemove(claudePath, name);
     } else {
       log.info(`Warning: Claude Code not found — MCP cleanup skipped.`);
-      log.info(`  If registered, run: claude mcp remove ${name} --scope user`);
+      log.info(`  If registered, run: ${manualMcpRemoveCommand(name)}`);
     }
   }
 

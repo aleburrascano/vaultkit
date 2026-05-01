@@ -7,7 +7,7 @@ import { validateName, sha256 } from '../lib/vault.js';
 import { renderVaultJson } from '../lib/vault-templates.js';
 import { createDirectoryTree, writeLayoutFiles, CANONICAL_LAYOUT_FILES } from '../lib/vault-layout.js';
 import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
-import { findOrInstallClaude, runMcpAdd, manualMcpAddCommand } from '../lib/mcp.js';
+import { findOrInstallClaude, runMcpAdd, runMcpRemove, manualMcpAddCommand } from '../lib/mcp.js';
 import { repoUrl, repoCloneUrl } from '../lib/github.js';
 import { ConsoleLogger, type Logger } from '../lib/logger.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES } from '../lib/constants.js';
@@ -312,7 +312,7 @@ export async function run(
     if (registeredMcp) {
       const claudePath = await findTool('claude');
       if (claudePath) {
-        await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
+        await runMcpRemove(claudePath, name);
         log.info('  MCP registration removed.');
       }
     }

@@ -6,6 +6,7 @@ import { removeFromRegistry } from '../lib/registry.js';
 import { findTool } from '../lib/platform.js';
 import { getRepoSlug } from '../lib/git.js';
 import { isAdmin, ensureDeleteRepoScope, repoUrl } from '../lib/github.js';
+import { runMcpRemove, manualMcpRemoveCommand } from '../lib/mcp.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError, DEFAULT_MESSAGES } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
@@ -84,12 +85,12 @@ export async function run(
     const claudePath = await findTool('claude');
     if (claudePath) {
       log.info('Removing MCP server...');
-      const result = await execa(claudePath, ['mcp', 'remove', name, '--scope', 'user'], { reject: false });
-      status.mcp = result.exitCode === 0 ? 'removed' : 'not-registered';
-      if (status.mcp === 'not-registered') log.info('  (not registered — skipping)');
+      const { removed } = await runMcpRemove(claudePath, name);
+      status.mcp = removed ? 'removed' : 'not-registered';
+      if (!removed) log.info('  (not registered — skipping)');
     } else {
       log.info('Warning: Claude Code not found — MCP cleanup skipped.');
-      log.info(`  If registered, run: claude mcp remove ${name} --scope user`);
+      log.info(`  If registered, run: ${manualMcpRemoveCommand(name)}`);
     }
   }
 
