@@ -10,15 +10,15 @@
 export type VaultkitErrorCode =
   | 'INVALID_NAME'           // vault name failed format/length validation
   | 'NOT_REGISTERED'         // vault name not present in MCP registry
-  | 'ALREADY_REGISTERED'     // attempted re-register of an existing name
-  | 'NOT_VAULT_LIKE'         // dir missing .obsidian or CLAUDE.md+raw+wiki
+  | 'ALREADY_REGISTERED'     // re-register of existing name OR target dir already on disk
+  | 'NOT_VAULT_LIKE'         // dir missing .obsidian/CLAUDE.md/raw/wiki, .git, or launcher
   | 'HASH_MISMATCH'          // launcher SHA-256 differs from pinned hash
-  | 'AUTH_REQUIRED'          // gh auth missing or insufficient scope
-  | 'PERMISSION_DENIED'      // user lacks admin on the remote repo
-  | 'TOOL_MISSING'           // gh, claude, or git not found on PATH
+  | 'AUTH_REQUIRED'          // gh auth missing, insufficient scope, or status check failed
+  | 'PERMISSION_DENIED'      // user lacks admin on the remote OR plan tier insufficient
+  | 'TOOL_MISSING'           // gh, claude, git, or Node.js (too old / install failed)
   | 'NETWORK_TIMEOUT'        // git fetch/pull or gh API timed out
-  | 'UNRECOGNIZED_INPUT'     // user-supplied input couldn't be parsed
-  | 'PARTIAL_FAILURE';       // some operations in a multi-step flow failed
+  | 'UNRECOGNIZED_INPUT'     // user-supplied input (mode, URL, etc.) couldn't be parsed
+  | 'PARTIAL_FAILURE';       // multi-step flow failed mid-way (e.g. pull-then-repin)
 
 /**
  * Errors thrown intentionally by vaultkit, with a machine-readable code.

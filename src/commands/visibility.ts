@@ -57,7 +57,7 @@ export async function run(
   if (target === 'auth-gated') {
     const plan = await getUserPlan().catch(() => 'free');
     if (plan === 'free') {
-      throw new Error(`auth-gated Pages requires GitHub Pro+ (your plan: ${plan}).`);
+      throw new VaultkitError('PERMISSION_DENIED', `auth-gated Pages requires GitHub Pro+ (your plan: ${plan}).`);
     }
   }
 

@@ -5,6 +5,7 @@ import { getAllVaults } from '../lib/registry.js';
 import { getStatus } from '../lib/git.js';
 import { Vault } from '../lib/vault.js';
 import { ConsoleLogger } from '../lib/logger.js';
+import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export async function run(
@@ -15,7 +16,7 @@ export async function run(
     // Single-vault detailed mode
     const vault = await Vault.requireFromName(name, cfgPath);
     if (!vault.hasGitRepo()) {
-      throw new Error(`${vault.dir} is not a git repository.`);
+      throw new VaultkitError('NOT_VAULT_LIKE', `${vault.dir} is not a git repository.`);
     }
     log.info(`${name}`);
     log.info(`  Path: ${vault.dir}`);

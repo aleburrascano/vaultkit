@@ -9,6 +9,7 @@ import { findTool } from '../lib/platform.js';
 import { runMcpRepin, manualMcpRepinCommands } from '../lib/mcp.js';
 import { add, commit, pushOrPr } from '../lib/git.js';
 import { ConsoleLogger } from '../lib/logger.js';
+import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
 import { VAULT_FILES } from '../lib/constants.js';
 import type { CommandModule, RunOptions } from '../types.js';
@@ -27,7 +28,7 @@ export async function run(
   const vault = await Vault.requireFromName(name, cfgPath);
 
   if (!vault.hasGitRepo()) {
-    throw new Error(`${vault.dir} is not a git repository — aborting.`);
+    throw new VaultkitError('NOT_VAULT_LIKE', `${vault.dir} is not a git repository — aborting.`);
   }
 
   log.info(`Updating ${name} at ${vault.dir}...`);

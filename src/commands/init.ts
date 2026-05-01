@@ -6,7 +6,7 @@ import { execa } from 'execa';
 import { validateName, sha256 } from '../lib/vault.js';
 import { renderVaultJson } from '../lib/vault-templates.js';
 import { createDirectoryTree, writeLayoutFiles, CANONICAL_LAYOUT_FILES } from '../lib/vault-layout.js';
-import { findTool, vaultsRoot, isWindows } from '../lib/platform.js';
+import { findTool, vaultsRoot, installGhForPlatform } from '../lib/platform.js';
 import { findOrInstallClaude, runMcpAdd, runMcpRemove, manualMcpAddCommand } from '../lib/mcp.js';
 import {
   createRepo, deleteRepo, getCurrentUser, getUserPlan,
@@ -14,6 +14,7 @@ import {
   repoUrl, repoCloneUrl,
 } from '../lib/github.js';
 import { ConsoleLogger, type Logger } from '../lib/logger.js';
+import { VaultkitError } from '../lib/errors.js';
 import { VAULT_FILES, VAULT_DIRS, WORKFLOW_FILES, PUBLISH_MODES, isPublishMode, type PublishMode } from '../lib/constants.js';
 import { PROMPTS } from '../lib/messages.js';
 import type { CommandModule, RunOptions } from '../types.js';
@@ -27,44 +28,6 @@ export interface InitOptions extends RunOptions {
   gitName?: string;
   gitEmail?: string;
   skipInstallCheck?: boolean;
-}
-
-async function installGh(log: Logger, skipInstallCheck: boolean = false): Promise<void> {
-  log.info('GitHub CLI not found — installing...');
-  if (isWindows()) {
-    const ok = skipInstallCheck || await confirm({ message: 'Install GitHub CLI via winget?', default: true });
-    if (ok) {
-      await execa('winget', ['install', '--id', 'GitHub.cli', '-e',
-        '--accept-package-agreements', '--accept-source-agreements'], { reject: false });
-      // Probe known install paths
-      const dirs = [
-        join(process.env.PROGRAMFILES ?? 'C:\\Program Files', 'GitHub CLI'),
-        'C:\\Program Files\\GitHub CLI',
-        join(process.env.LOCALAPPDATA ?? '', 'Microsoft', 'WinGet', 'Links'),
-      ];
-      for (const d of dirs) {
-        if (existsSync(d)) {
-          process.env.PATH = `${d};${process.env.PATH ?? ''}`;
-        }
-      }
-    }
-  } else if (process.platform === 'darwin' && await execa('which', ['brew'], { reject: false }).then(r => r.exitCode === 0)) {
-    await execa('brew', ['install', 'gh']);
-  } else if (await execa('which', ['apt-get'], { reject: false }).then(r => r.exitCode === 0)) {
-    await execa('bash', ['-c',
-      'curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg 2>/dev/null && ' +
-      'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && ' +
-      'sudo apt-get update -qq && sudo apt-get install gh -y',
-    ]);
-  } else if (await execa('which', ['dnf'], { reject: false }).then(r => r.exitCode === 0)) {
-    await execa('bash', ['-c',
-      'sudo dnf install "dnf-command(config-manager)" -y && ' +
-      'sudo dnf config-manager --add-repo https://cli.github.com/packages/rpm/gh-cli.repo && ' +
-      'sudo dnf install gh --repo gh-cli -y',
-    ]);
-  } else {
-    throw new Error('Cannot auto-install gh. Install from https://cli.github.com and re-run.');
-  }
 }
 
 // ─── Phase helpers — keep init's run() readable as a sequence ─────────────
@@ -100,7 +63,7 @@ interface PublishConfig {
 
 async function selectPublishMode(publishModeOpt: PublishMode | undefined): Promise<PublishConfig> {
   if (publishModeOpt !== undefined && !isPublishMode(publishModeOpt)) {
-    throw new Error(`Invalid publishMode: "${publishModeOpt}". Must be one of: ${PUBLISH_MODES.join(', ')}`);
+    throw new VaultkitError('UNRECOGNIZED_INPUT', `Invalid publishMode: "${publishModeOpt}". Must be one of: ${PUBLISH_MODES.join(', ')}`);
   }
   const publishMode: PublishMode = publishModeOpt ?? await select<PublishMode>({
     message: 'Publish this vault as a public knowledge site?',
@@ -114,7 +77,7 @@ async function selectPublishMode(publishModeOpt: PublishMode | undefined): Promi
   if (publishMode === 'auth-gated') {
     const plan = await getUserPlan().catch(() => 'free');
     if (plan === 'free') {
-      throw new Error(`auth-gated Pages requires GitHub Pro+ (you're on Free).\n  Choose Public or Private instead.`);
+      throw new VaultkitError('PERMISSION_DENIED', `auth-gated Pages requires GitHub Pro+ (you're on Free).\n  Choose Public or Private instead.`);
     }
   }
 
@@ -131,7 +94,7 @@ async function getGithubUser(): Promise<string> {
   try {
     return await getCurrentUser();
   } catch {
-    throw new Error('Could not fetch your GitHub username. Run: gh auth status');
+    throw new VaultkitError('AUTH_REQUIRED', 'Could not fetch your GitHub username. Run: gh auth status');
   }
 }
 
@@ -230,15 +193,15 @@ export async function run(
 
   const nodeMajor = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
   if (nodeMajor < 22) {
-    throw new Error(`Node.js 22+ required (found v${process.versions.node}).\n  Update at: https://nodejs.org`);
+    throw new VaultkitError('TOOL_MISSING', `Node.js 22+ required (found v${process.versions.node}).\n  Update at: https://nodejs.org`);
   }
 
   let ghPath = await findTool('gh');
   if (!ghPath) {
-    await installGh(log, skipInstallCheck);
+    await installGhForPlatform({ log, skipInstallCheck });
     ghPath = await findTool('gh');
     if (!ghPath) {
-      throw new Error('gh was installed but could not be found. Open a new terminal and re-run vaultkit init.');
+      throw new VaultkitError('TOOL_MISSING', 'gh was installed but could not be found. Open a new terminal and re-run vaultkit init.');
     }
   }
 
@@ -250,7 +213,7 @@ export async function run(
     await selectPublishMode(publishModeOpt);
 
   mkdirSync(root, { recursive: true });
-  if (existsSync(vaultDir)) throw new Error(`${vaultDir} already exists.`);
+  if (existsSync(vaultDir)) throw new VaultkitError('ALREADY_REGISTERED', `${vaultDir} already exists.`);
 
   const githubUser = await getGithubUser();
   const baseUrl = `${githubUser}.github.io/${name}`;

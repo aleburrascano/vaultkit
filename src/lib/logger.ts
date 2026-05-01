@@ -22,11 +22,17 @@ export interface Logger {
 
 /**
  * Default Logger implementation: routes info to stdout, warn/error/debug
- * to stderr. Debug output is suppressed unless the `verbose` flag is set,
- * matching the `--verbose` global option in `bin/vaultkit.ts`.
+ * to stderr. Debug output is suppressed unless verbose mode is on, which
+ * is enabled by either an explicit constructor flag or the
+ * `VAULTKIT_VERBOSE=1` env var (set by the `--verbose` global option in
+ * `bin/vaultkit.ts`, or pre-set by scripted callers).
  */
 export class ConsoleLogger implements Logger {
-  constructor(private readonly opts: { verbose?: boolean } = {}) {}
+  private readonly verbose: boolean;
+
+  constructor(opts: { verbose?: boolean } = {}) {
+    this.verbose = opts.verbose ?? process.env.VAULTKIT_VERBOSE === '1';
+  }
 
   info(...args: unknown[]): void {
     console.log(...args);
@@ -41,7 +47,7 @@ export class ConsoleLogger implements Logger {
   }
 
   debug(...args: unknown[]): void {
-    if (this.opts.verbose) console.error('[debug]', ...args);
+    if (this.verbose) console.error('[debug]', ...args);
   }
 }
 

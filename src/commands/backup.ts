@@ -5,6 +5,7 @@ import { Vault } from '../lib/vault.js';
 import { archiveZip } from '../lib/git.js';
 import { vaultsRoot } from '../lib/platform.js';
 import { ConsoleLogger } from '../lib/logger.js';
+import { VaultkitError } from '../lib/errors.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface BackupOptions extends RunOptions {
@@ -18,7 +19,7 @@ export async function run(
   const vault = await Vault.requireFromName(name, cfgPath);
 
   if (!vault.hasGitRepo()) {
-    throw new Error(`${vault.dir} is not a git repository.`);
+    throw new VaultkitError('NOT_VAULT_LIKE', `${vault.dir} is not a git repository.`);
   }
 
   const statusResult = await execa('git', ['-C', vault.dir, 'status', '--porcelain'], { reject: false });

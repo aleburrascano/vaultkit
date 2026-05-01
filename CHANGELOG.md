@@ -4,6 +4,26 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Fixed
+- **`--verbose` / `-v` flag now actually does something.** The flag was declared in [bin/vaultkit.ts](bin/vaultkit.ts) but never read; `ConsoleLogger.debug()` stayed a no-op even when the flag was passed, contradicting the README copy that promised trace output. The fix: a `preAction` hook on the commander program sets `process.env.VAULTKIT_VERBOSE='1'` when `--verbose` is passed, `ConsoleLogger`'s constructor reads the env var as a fallback for the `verbose` opt, and `wrap()` emits a start/end debug breadcrumb (`[debug] vaultkit <cmd> <args>` and `[debug] <cmd> ok|exit=N (<duration>ms)`) on stderr. Scripted callers can also pre-set `VAULTKIT_VERBOSE=1` directly without `--verbose`, matching the existing `VAULTKIT_LOG` pattern.
+
+### Changed
+- **`installGh` moved from [src/commands/init.ts](src/commands/init.ts) to [src/lib/platform.ts](src/lib/platform.ts) as `installGhForPlatform({ log, skipInstallCheck })`.** The 37-line winget/brew/apt/dnf bootstrap was platform-specific package-management logic living in a command file — it belongs next to `findTool` in the platform module. `init.ts` shrinks accordingly; the unused `isWindows` import in init.ts is dropped. No behavior change — tests pass unchanged through the same execa mocks.
+- **Error categorization sweep — 11 plain `Error` throws → `VaultkitError`** across [backup.ts](src/commands/backup.ts), [status.ts](src/commands/status.ts), [update.ts](src/commands/update.ts), [verify.ts](src/commands/verify.ts), [init.ts](src/commands/init.ts), and [visibility.ts](src/commands/visibility.ts). These previously collapsed to exit code 1; they now map to the documented 2-12 range, so scripted callers can branch on category. No new error codes added — sites reuse existing codes, with `errors.ts` docstrings broadened to reflect the wider scope:
+  - `NOT_VAULT_LIKE` — also covers registered vault dirs missing `.git` or the launcher (4 sites: backup, status, update, verify).
+  - `TOOL_MISSING` — also covers Node.js below the minimum and `gh` install/PATH failures (3 sites in init).
+  - `ALREADY_REGISTERED` — also covers a target directory already existing on disk (1 site in init).
+  - `PERMISSION_DENIED` — also covers insufficient GitHub plan tier (auth-gated Pages on Free) (2 sites: init, visibility).
+  - `AUTH_REQUIRED` — also covers a `gh` auth status check that fails to fetch the current user (1 site in init's GitHub username fetch).
+  - `UNRECOGNIZED_INPUT` — also covers an invalid `publishMode` passed programmatically (1 site in init).
+  - `PARTIAL_FAILURE` — covers `verify`'s `git pull --ff-only` failing after the user accepted upstream drift but before the re-pin completed (1 site in verify).
+
+  All error messages preserved verbatim — purely a visible-to-shell categorization change.
+
+### Tests
+- **`tests/lib/logger.test.ts`** — closes the largest unit-test gap surfaced by the v2.3.0 architectural review. Covers `ConsoleLogger` level routing (info → stdout, warn/error/debug → stderr), debug gating (silent by default, emits with `{ verbose: true }` opt, emits with `VAULTKIT_VERBOSE=1` env, explicit opt overrides env, env captured at construction time), the `[debug]` prefix, and `SilentLogger` no-op behavior.
+- **`tests/lib/vault-templates.test.ts`** — drift guard for the 8 static-content builders (`renderClaudeMd`, `renderReadme`, `renderDuplicateCheckYaml`, `renderVaultJson`, `renderGitignore`, `renderGitattributes`, `renderIndexMd`, `renderLogMd`) that ship into every newly-initialized vault. 30 new tests asserting interpolation correctness (vault name in CLAUDE.md/README titles, owner+repo in vault.json `baseUrl`), structural anchors (canonical section headings, GitHub Actions workflow shape, gitignore/gitattributes rules, JSON parsability), and the siteUrl-toggled README copy. Avoids full-text snapshots so harmless wording tweaks don't require test updates.
+
 ## [2.3.0] - 2026-05-01
 
 ### Added

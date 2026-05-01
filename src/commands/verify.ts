@@ -19,7 +19,7 @@ export async function run(
   const vault = await Vault.requireFromName(name, cfgPath);
 
   if (!vault.hasLauncher()) {
-    throw new Error(`${vault.launcherPath} does not exist.\n  Run 'vaultkit update ${name}' to install the launcher.`);
+    throw new VaultkitError('NOT_VAULT_LIKE', `${vault.launcherPath} does not exist.\n  Run 'vaultkit update ${name}' to install the launcher.`);
   }
 
   const pinned = vault.expectedHash ?? '';
@@ -70,7 +70,7 @@ export async function run(
     if (!ok) { log.info(LABELS.ABORTED); return; }
     const pullResult = await execa('git', ['-C', vault.dir, 'pull', '--ff-only', '--quiet'], { reject: false });
     if (pullResult.exitCode !== 0) {
-      throw new Error(`git pull failed. Resolve manually and re-run vaultkit verify ${name}.`);
+      throw new VaultkitError('PARTIAL_FAILURE', `git pull failed. Resolve manually and re-run vaultkit verify ${name}.`);
     }
     finalHash = await sha256(vault.launcherPath);
     log.info(`  Pulled. New on-disk SHA-256: ${finalHash}`);

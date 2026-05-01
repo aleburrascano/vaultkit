@@ -18,12 +18,16 @@ function auditLog(command: string, args: string[], exitCode: number, start: numb
 
 async function wrap(fn: () => Promise<void>, commandName: string, args: string[]): Promise<void> {
   const start = Date.now();
+  const verbose = process.env.VAULTKIT_VERBOSE === '1';
+  if (verbose) console.error(`[debug] vaultkit ${commandName}${args.length ? ' ' + args.join(' ') : ''}`);
   try {
     await fn();
     auditLog(commandName, args, 0, start);
+    if (verbose) console.error(`[debug] ${commandName} ok (${Date.now() - start}ms)`);
   } catch (err) {
     const exitCode = isVaultkitError(err) ? EXIT_CODES[err.code] : 1;
     auditLog(commandName, args, exitCode, start);
+    if (verbose) console.error(`[debug] ${commandName} exit=${exitCode} (${Date.now() - start}ms)`);
     const message = (err as { message?: string })?.message;
     if (message) {
       process.stderr.write(`Error: ${message}\n`);
@@ -38,6 +42,10 @@ program
   .description('Obsidian wiki management')
   .version(pkg.version)
   .option('-v, --verbose', 'enable trace output');
+
+program.hook('preAction', () => {
+  if (program.opts().verbose) process.env.VAULTKIT_VERBOSE = '1';
+});
 
 program
   .command('init <name>')
