@@ -4,6 +4,23 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-04-30
+
+### Added
+- **`src/lib/constants.ts`** — domain-meaningful literal constants: `VAULT_FILES` (LAUNCHER, CLAUDE_MD, README, INDEX, LOG, GITIGNORE, GITATTRIBUTES, VAULT_JSON, OBSIDIAN_DIR), `VAULT_DIRS` (RAW, WIKI, GITHUB_WORKFLOWS), `WORKFLOW_FILES` (DEPLOY, DUPLICATE_CHECK), `VAULT_CONSTRAINTS` (NAME_MAX_LENGTH, NAME_PATTERN). Replaces 100+ inline string literals across the codebase. Pinned by `tests/lib/constants.test.ts` so a typo in the launcher filename can't silently desync from user-vault SHA pins.
+- **`src/lib/vault-layout.ts`** — single source of truth for the canonical vault file structure. `CANONICAL_LAYOUT_FILES`, `renderLayoutFile(path, ctx)`, `detectLayoutGaps(vaultDir)`, `createDirectoryTree(vaultDir)`, `writeLayoutFiles(vaultDir, ctx, files)`. Used by `init` (full creation) and `update` (gap repair) — replaces two divergent codepaths that each built the same layout differently.
+- **`getRepoSlug(dir)`** in `src/lib/git.ts` — deduplicates the `git remote get-url origin` parser previously inlined in both `destroy.ts` and `visibility.ts`.
+- **`DEFAULT_MESSAGES`** in `src/lib/errors.ts` — canonical sentence-fragment phrasings per `VaultkitErrorCode`. Pattern: `\`"${name}" ${DEFAULT_MESSAGES.NOT_REGISTERED}\``. Converged seven NOT_REGISTERED throw sites that previously phrased the same concept three ways.
+- **`src/lib/messages.ts`** — `PROMPTS` (TYPE_NAME_TO_CONFIRM, TYPE_NAME_TO_CONFIRM_DELETION, PROCEED, INSTALL_CLAUDE, REGISTER_AS_MCP) and `LABELS` (ABORTED). Strings that appear in 2+ command files now live in one place; one-shot prompts deliberately stay inline.
+- **GitHub URL builders** in `src/lib/github.ts`: `repoUrl(slug, path?)`, `repoCloneUrl(owner, repo)`, `pagesUrl(owner, repo)`. Replaces 6 inline `https://github.com/${...}` template literals — a single source of truth for github.com URL construction.
+- **`tests/lib/constants.test.ts`** (11 tests), **`tests/lib/vault-layout.test.ts`** (14 tests).
+
+### Changed
+- **`src/commands/init.ts`** decomposed: `run()` shrank from ~220 lines to ~118 lines by extracting named phase helpers (`ensureGhAuth`, `ensureGitConfig`, `selectPublishMode`, `getGithubUser`, `createRemoteRepo`, `setupGitHubPages`, `setupBranchProtection`, `registerMcpForVault`, `printDoneSummary`). Each phase is now a scannable named function.
+
+### Internal
+- Test count: 260 → 292 passing (32 new tests). No behavior change visible to end users; all changes are additive new exports plus internal restructuring.
+
 ## [2.1.0] - 2026-04-30
 
 ### Added
