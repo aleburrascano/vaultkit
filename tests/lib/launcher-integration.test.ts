@@ -21,7 +21,11 @@ function git(cwd: string, ...args: string[]): void {
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-launcher-int-')); });
-afterEach(() => { rmSync(tmp, { recursive: true, force: true }); });
+// Windows: spawned child processes can briefly hold file handles in `tmp`
+// after they exit, causing rmSync to throw EBUSY. maxRetries gives the OS
+// up to 500ms (5 × 100ms) to release them — invisible on the happy path
+// (Linux/macOS or already-free files), required on Windows CI runners.
+afterEach(() => { rmSync(tmp, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); });
 
 // ── Step 1: SHA-256 self-verification ────────────────────────────────────────
 
