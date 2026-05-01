@@ -4,6 +4,12 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **Per-command `--help` examples.** Each command (`init`, `connect`, `destroy`, `pull`, etc.) now exposes a usage paragraph and example invocations via commander's `addHelpText('after', ...)`. Closes the gap where the README promised "detailed usage" via `--help` but each command's help printed only the one-line stub. Per-command help is now self-contained — users no longer need to grep the README for a working invocation. Examples include security-relevant context (`destroy` documents the `delete_repo` scope pre-grant; `connect` warns about the launcher's full-user-permission scope).
+
+### Changed
+- **`vaultkit --version` includes runtime info.** Output goes from `2.5.0` to `2.5.0 (node v22.x.x, <platform> <arch>)`, matching the README's existing promise of "version + runtime info". One-line bug-report-friendly format that also surfaces node-version mismatches when troubleshooting.
+
 ### Docs
 - **README `connect` example now shows the SSH URL form** (`git@github.com:owner/repo`). The parser in [src/commands/connect.ts](src/commands/connect.ts) `_normalizeInput` already accepted SSH URLs and `.git` suffixes (covered by `tests/commands/connect.test.ts:72-73`); the README only documented two of three forms, so users copy-pasting from `gh repo view` thought they were getting away with something undocumented.
 
