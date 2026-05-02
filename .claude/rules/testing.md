@@ -3,6 +3,8 @@
 Test runner: `npm test` (runs vitest in single-pass mode against the TypeScript source directly — no build needed for tests).
 Watch mode: `npm run test:watch`
 
+For coverage audits and finding missing tests across this codebase, invoke [`/test [target]`](../commands/test.md) — the testing-expert command/skill that dispatches six parallel sub-reviewers (unit / mocked-integration / e2e / edge cases / security / cross-platform) and produces a priority-ranked coverage report. It auto-triggers on prompts about edge cases, coverage gaps, or test types, so most of the time you don't need to invoke it explicitly.
+
 **Tests are always live.** As of v2.5.0 there is no `VAULTKIT_LIVE_TEST` env-gate — every `npm test` run hits the real GitHub API and creates ephemeral `vk-live-*` repos against the authenticated `gh` account. Files are run sequentially (`fileParallelism: false` in `vitest.config.ts`) to avoid `~/.claude.json` write races. CI uses a dedicated PAT (`VAULTKIT_TEST_GH_TOKEN`) — see `.github/workflows/main.yml`. The `vaultkit-live-tests` concurrency group ensures only one CI run touches that account at a time.
 
 **Burst-rate hardening (2.7.1).** GitHub's secondary rate limit (~80 content-creating requests/minute) is the hard ceiling for live-test throughput. Two structural defenses keep us under it:
