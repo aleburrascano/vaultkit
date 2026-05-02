@@ -287,7 +287,7 @@ describe('live: status reports real vault state', { timeout: 60_000 }, () => {
   }, 60_000);
 
   afterAll(async () => {
-    await restoreReal();
+    try { await restoreReal(); } catch { /* don't let mock-restore failures skip the destroy below */ }
     const { run } = await import('../../src/commands/destroy.js');
     await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
   }, 60_000);

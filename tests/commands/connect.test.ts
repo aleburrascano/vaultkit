@@ -241,7 +241,7 @@ describe('live: connect clones real GitHub repo', { timeout: 90_000 }, () => {
   }, 60_000);
 
   afterAll(async () => {
-    await restoreReal();
+    try { await restoreReal(); } catch { /* don't let mock-restore failures skip the cleanup below */ }
     // Remove local clone if test left it
     const { getVaultDir } = await import('../../src/lib/registry.js');
     const dir = await getVaultDir(LIVE_VAULT).catch(() => null);

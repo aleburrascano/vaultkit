@@ -26,6 +26,18 @@ Test files live in `tests/` and mirror the source tree:
 - For typed mocks, prefer `await importOriginal<typeof import('module')>()` so the `...real` spread is typed.
 - For `vi.mocked(execa).mockImplementation(...)` and `mockResolvedValue(...)`, use `(async (...) => ({...})) as never` to satisfy execa's overloaded Result type.
 
+## Cleanup invariants
+
+The `vk-live-*` prefix in `~/.claude.json#mcpServers` and on GitHub repos is the **test-owned namespace** — vaultkit's tests own it, nothing else should write keys with that prefix. Three layers of cleanup defend against leaks:
+
+1. **Per-test `afterAll` (primary).** Each live `describe('live: ...', ...)` block has an `afterAll` hook that calls `destroy` (or its slug-only equivalent for files that don't register in the registry). Hooks wrap `restoreReal()` in `try/catch` so a mock-restoration failure doesn't skip the actual cleanup. Cleanup chains use `.catch(() => {})` per step and `reject: false` on `execa` calls so one failure doesn't cascade. Plenty of test files pass `skipMcp: true` to `destroy` deliberately (avoids invoking the `claude` CLI subprocess); the registry entries are then swept by layer 2.
+
+2. **Vitest `globalTeardown` (secondary).** [tests/global-teardown.ts](../../tests/global-teardown.ts) (wired via `globalSetup` in `vitest.config.ts`) sweeps every `vk-live-*` key from `~/.claude.json#mcpServers` once after the entire suite finishes. Atomic write (`<path>.tmp` + rename); no-op if the file or `mcpServers` key is missing; throws (never silently rewrites) on corrupt JSON.
+
+3. **`npm run test:cleanup` (tertiary, manual).** [scripts/test-cleanup.mjs](../../scripts/test-cleanup.mjs) runs the same sweep standalone. Use when the test process gets `SIGKILL`'d before vitest can fire its globalTeardown, or after a CI run leaks artifacts to a developer's local registry.
+
+GitHub repo orphans are handled by the workflow files (`pre-test cleanup of orphaned live-test repos` in both `ci.yml` and `release.yml`) plus per-test `afterAll` `gh repo delete --yes` with `reject: false`. The local equivalent is `gh repo list <user> --json name --jq '.[] | select(.name | startswith("vk-live-")) | .name' | xargs -I{} gh repo delete <user>/{} --yes`.
+
 ## Sacred tests rule
 
 Test files are read-only unless explicitly instructed. If a test is failing, fix the implementation, not the test. "The test was wrong" requires explicit human confirmation.
