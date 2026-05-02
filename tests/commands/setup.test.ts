@@ -110,4 +110,37 @@ describe('setup command', () => {
     expect(issues).toBe(0);
     expect(lines.some(l => /! warn\s+claude:/.test(l))).toBe(true);
   });
+
+  // Security invariant guard — see .claude/rules/security-invariants.md.
+  // delete_repo must never be requested by setup; that scope is granted on
+  // demand by destroy only. A future PR adding delete_repo to setup.ts's
+  // ensureGhAuth scopes array would silently break the invariant; this
+  // test fails behaviorally if any execa call ever includes 'delete_repo'.
+  it('never requests the delete_repo scope from gh', async () => {
+    vi.mocked(findTool).mockImplementation(async (name: string) => {
+      if (name === 'gh') return '/usr/bin/gh';
+      if (name === 'claude') return '/usr/bin/claude';
+      return null;
+    });
+    const allExecaArgs: readonly string[][] = [];
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
+      if (args) (allExecaArgs as string[][]).push([...args]);
+      // Force the scope-refresh branch so the worst-case argv lands in our log.
+      if (args?.[0] === 'auth' && args?.[1] === 'status') {
+        return { exitCode: 0, stdout: '', stderr: "Token scopes: 'gist'" };
+      }
+      if (args?.[0] === 'auth' && args?.[1] === 'refresh') {
+        return { exitCode: 0, stdout: '', stderr: '' };
+      }
+      if (args?.[0] === 'config' && args?.[1] === 'user.name') return { exitCode: 0, stdout: 'X', stderr: '' };
+      if (args?.[0] === 'config' && args?.[1] === 'user.email') return { exitCode: 0, stdout: 'x@y', stderr: '' };
+      return { exitCode: 0, stdout: '', stderr: '' };
+    }) as never);
+
+    const { run } = await import('../../src/commands/setup.js');
+    await run({ skipInstallCheck: true, log: arrayLogger([]) });
+
+    const flat = allExecaArgs.map(a => a.join(' ')).join('\n');
+    expect(flat).not.toMatch(/delete_repo/);
+  });
 });

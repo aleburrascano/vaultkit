@@ -90,8 +90,10 @@ export async function ensureGhAuth({ ghPath, log, scopes }: EnsureGhAuthOptions)
   }
   if (!scopes || scopes.length === 0) return;
   // gh prints "Token scopes: 'repo', 'workflow', ..." to stderr in `auth status`.
+  // Match each scope as a quoted literal (not a regex pattern) — a scope name
+  // containing `.`, `*`, etc. would otherwise be interpreted as wildcards.
   const output = String(status.stderr ?? '') + String(status.stdout ?? '');
-  const missing = scopes.filter(s => !new RegExp(`'${s}'`).test(output));
+  const missing = scopes.filter(s => !output.includes(`'${s}'`));
   if (missing.length > 0) {
     log.info(`  Granting additional scopes: ${missing.join(', ')}…`);
     await execa(ghPath, ['auth', 'refresh', '-h', 'github.com', '-s', missing.join(',')],
