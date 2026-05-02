@@ -61,10 +61,14 @@ export async function push(dir: string): Promise<GitPushResult> {
 
 /**
  * Push the local branch to `origin` immediately after the remote was created.
- * Retries on "Repository not found" with exponential backoff — GitHub has
- * eventual consistency between `gh repo create` returning and the new repo's
- * git endpoints accepting pushes. On fast runners the push can hit GitHub
- * before that propagates. Used by `init` after `[4/6] Creating GitHub repo`.
+ * Retries any non-zero exit with exponential backoff (1s/2s/4s, 4 attempts).
+ * GitHub has eventual consistency between `gh repo create` returning and the
+ * new repo's git endpoints accepting pushes; the race surfaces through many
+ * shapes — `Repository not found`, `RPC failed; HTTP 404`, `unexpected
+ * disconnect`, `the remote end hung up`, etc. Rather than enumerate, treat
+ * any failure on the first push as transient. Real misconfigurations
+ * (wrong creds, missing branch) still surface after the retry budget.
+ * Used by `init` after `[4/6] Creating GitHub repo`.
  */
 export async function pushNewRepo(dir: string, branch: string = 'main'): Promise<void> {
   const args = ['-C', dir, 'push', '-u', 'origin', branch];
@@ -72,10 +76,9 @@ export async function pushNewRepo(dir: string, branch: string = 'main'): Promise
   for (let attempt = 0; ; attempt++) {
     const result = await execa('git', args, { reject: false });
     if (result.exitCode === 0) return;
-    const stderr = String(result.stderr ?? '');
-    const transient = stderr.includes('Repository not found');
-    if (!transient || attempt >= delays.length) {
-      throw new Error(`git push to origin/${branch} failed: ${stderr.trim() || `exit ${result.exitCode}`}`);
+    if (attempt >= delays.length) {
+      const stderr = String(result.stderr ?? '').trim();
+      throw new Error(`git push to origin/${branch} failed after ${delays.length + 1} attempts: ${stderr || `exit ${result.exitCode}`}`);
     }
     await new Promise<void>(r => setTimeout(r, delays[attempt] ?? 0));
   }
