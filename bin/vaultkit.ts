@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { isVaultkitError, EXIT_CODES } from '../src/lib/errors.js';
+import type { PublishMode } from '../src/lib/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(readFileSync(join(__dirname, '../../package.json'), 'utf8')) as { version: string };
@@ -71,20 +72,24 @@ re-run any time to fix what's broken. Does NOT request the delete_repo scope
 program
   .command('init <name>')
   .description('Create a new vault from scratch')
+  .option('-m, --mode <mode>', 'publish mode: public, private, or auth-gated (skips the interactive prompt)')
   .addHelpText('after', `
 Examples:
-  $ vaultkit init my-wiki
+  $ vaultkit init my-wiki                       # interactive: prompts for publish mode
+  $ vaultkit init my-wiki --mode private        # skip prompt: private notes-only
+  $ vaultkit init my-wiki --mode public         # skip prompt: public Quartz site
+  $ vaultkit init my-wiki --mode auth-gated     # skip prompt: auth-gated Pages (Pro+)
 
 Creates ~/vaults/<name> (override with VAULTKIT_HOME), creates a GitHub repo,
-and registers the vault as a Claude Code MCP server. Interactive: prompts for
-publish mode (public Quartz site / private notes-only / auth-gated Pages).
-Vault names must match ^[a-zA-Z0-9_-]+$, max 64 chars.
+and registers the vault as a Claude Code MCP server. Without --mode, prompts
+for publish mode interactively. Vault names must match ^[a-zA-Z0-9_-]+$, max
+64 chars.
 `)
-  .action(async (name: string) => {
+  .action(async (name: string, options: { mode?: string }) => {
     await wrap(async () => {
       const { run } = await import('../src/commands/init.js');
-      await run(name);
-    }, 'init', [name]);
+      await run(name, options.mode ? { publishMode: options.mode as PublishMode } : {});
+    }, 'init', options.mode ? [name, '--mode', options.mode] : [name]);
   });
 
 program
