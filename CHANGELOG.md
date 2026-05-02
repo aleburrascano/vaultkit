@@ -12,6 +12,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 ### Tests
 - **`tests/lib/update-check.test.ts`** -- 7 cases pinning the `_isNewer` 3-component-dot-version comparison: latest > current at each component (patch, minor, major), equal versions, current > latest, missing components default to 0, and non-numeric components return `false` rather than throwing.
 
+### Docs (continued)
+- **FAQ and Troubleshooting moved out of the README** into [docs/faq.md](docs/faq.md) and [docs/troubleshooting.md](docs/troubleshooting.md). Each retains its content verbatim plus a backlink to the README; the README keeps a 2-line summary pointing at each. The README shrinks by ~85 lines without losing any topical depth -- npm visitors still see a complete picture (lede, install, quick start, command reference, anatomy, security, configuration, FAQ pointer, troubleshooting pointer), while users who want the deep reference content reach it directly via `docs/`. Pure-content move; the only delta is the README pointers.
+
 ### Changed
 - **`vaultkit --version` includes runtime info.** Output goes from `2.5.0` to `2.5.0 (node v22.x.x, <platform> <arch>)`, matching the README's existing promise of "version + runtime info". One-line bug-report-friendly format that also surfaces node-version mismatches when troubleshooting.
 - **`vaultkit help` (and `vaultkit --help`) now show the README's categorized command list** (FIRST-TIME SETUP / CREATE & CONNECT / EVERYDAY USE / WHEN SOMETHING'S WRONG / CHANGE OR REMOVE) instead of commander's flat alphabetical-by-registration default. Aligns the CLI's first-impression help with the README's first-impression help so users see the same mental model on either surface. Implementation overrides `program.helpInformation` only on the root command; per-subcommand `--help` (init, connect, etc.) is unaffected and continues to use the `addHelpText` blocks added in this release.

@@ -294,87 +294,11 @@ export VAULTKIT_LOG=~/.vaultkit.log
 
 ## FAQ
 
-**Can I use this without GitHub?**
-
-No. Every vault is a GitHub repo — there's no GitLab, self-hosted-git, or local-only mode. If GitHub isn't an option for you, vaultkit isn't the right tool.
-
-**Does it cost money?**
-
-No for vaultkit itself. The auth-gated Pages mode (`vaultkit init` → `(a)`) requires GitHub Pro+ for the underlying Pages-private feature; everything else works on a free GitHub account.
-
-**Does my data go anywhere I haven't approved?**
-
-vaultkit itself only makes the network calls you'd expect: `git fetch` / `git push` against GitHub, `gh` API calls during `init` / `destroy` / `visibility`. No telemetry. The MCP server runs locally and reads from your local clone — Claude Code's own data-handling rules apply to whatever Claude actually retrieves and includes in a response, see your Claude Code settings.
-
-**Can I use vaults with MCP clients other than Claude Code?**
-
-In principle yes — the per-vault `.mcp-start.js` is a generic MCP server launcher and will work with any client that can spawn an MCP server. vaultkit's automation only registers with Claude Code (it writes to `~/.claude.json`); for another client you'd point its MCP config at the launcher path manually. Get the path from `vaultkit status <name>`. There's no built-in helper for this — file an issue if you need one for a specific client.
-
-**What's the difference between `disconnect` and `destroy`?**
-
-`disconnect` removes the local clone and the MCP registration; the GitHub repo and its commit history remain, and you can `connect` to it later. `destroy` does everything `disconnect` does *and* deletes the GitHub repo via `gh repo delete`. It only deletes the repo if you own it; collaborators get a `disconnect`-equivalent.
-
-**Can I have many vaults connected at once?**
-
-Yes. Each vault registers under its own MCP namespace (`mcp__<name>__search_notes`, `mcp__<name>__get_note`, …), so connect as many as you want — Claude can query all of them simultaneously when answering a question.
-
-**What's `_vault.json`?**
-
-A small Quartz config file in the vault root (`{ pageTitle, baseUrl }`). Quartz reads it when building the static site. vaultkit generates and updates it; you generally don't need to edit it by hand.
-
-**Where do my vaults live on disk?**
-
-Default: `~/vaults/<name>` (`%USERPROFILE%\vaults\<name>` on Windows). Override with `VAULTKIT_HOME=<path>` in your shell profile.
+Common questions — can I use this without GitHub, does it cost money, where does my data go, can I plug it into MCP clients other than Claude Code, what's the difference between `disconnect` and `destroy` — are answered in [docs/faq.md](./docs/faq.md).
 
 ## Troubleshooting
 
-### `vaultkit init` fails with "gh: command not found" on Windows
-
-Open a new Git Bash window after installing the GitHub CLI. Windows installers update PATH in the registry, but processes that started before the install (including your shell) won't see the change. Closing and reopening the terminal picks up the new PATH.
-
-### "Launcher SHA-256 mismatch — refusing to start" when Claude Code launches
-
-Either `.mcp-start.js` was modified locally or the vault was re-cloned without re-registering. Run:
-
-```bash
-vaultkit doctor                  # see which vault has drifted
-vaultkit update <vault-name>     # re-pin the current SHA-256
-```
-
-If you didn't make the change yourself and don't recognize the diff, treat it as suspicious — `cd` into the vault and `git log -p -- .mcp-start.js` to inspect.
-
-### "Vault has a new `.mcp-start.js` upstream — refusing to auto-update"
-
-The vault owner pushed a new launcher. Inspect the change before re-trusting:
-
-```bash
-cd ~/vaults/<vault-name>
-git diff HEAD..@{u} -- .mcp-start.js
-```
-
-If it looks legitimate (e.g., they ran `vaultkit update` against a new vaultkit version), run `vaultkit update <vault-name>` locally to re-pin.
-
-### `vaultkit destroy` says "you don't own this repo"
-
-You're a collaborator, not the owner. Only the GitHub repo's owner can delete it. The local clone and MCP registration are still removed — effectively a `disconnect`. To remove yourself from the repo's collaborators, do that manually on GitHub.
-
-### `vaultkit destroy` opens a browser tab the first time you run it
-
-vaultkit doesn't request the `delete_repo` GitHub scope at setup time — that's a deliberate choice so you're never asked up front to authorize a destructive permission you may never use. The trade-off is that your first `destroy` runs `gh auth refresh -s delete_repo` interactively, which opens a device-code browser flow. To pre-grant the scope (useful in CI or before scripted runs):
-
-```bash
-gh auth refresh -h github.com -s delete_repo
-```
-
-Subsequent `destroy` runs reuse the token and don't prompt. If you're authenticated via `GH_TOKEN` (a PAT, e.g. in CI), vaultkit skips the refresh — make sure the PAT was created with `delete_repo` already in its scopes.
-
-### `vaultkit update` fails to push to `main`
-
-Branch protection on `main` is rejecting the direct push. vaultkit automatically falls back to creating a feature branch and opening a pull request. Merge the PR (or have a maintainer merge it) and the launcher update will take effect.
-
-### "Could not auto-enable GitHub Pages" during `init`
-
-The Pages API call failed (often due to a brand-new repo where Pages isn't immediately ready). Enable manually at the URL printed in the warning, set Source to "GitHub Actions", and re-push to trigger the deploy workflow.
+If `vaultkit doctor` doesn't catch your problem, [docs/troubleshooting.md](./docs/troubleshooting.md) covers the recurring ones with the exact error string each time: launcher SHA-256 mismatch, "Vault has a new `.mcp-start.js` upstream", `gh: command not found` on Windows, the first-`destroy` browser flow, branch-protection push rejections during `update`, and `init` failing to enable GitHub Pages.
 
 ## Contributing to vaultkit
 
