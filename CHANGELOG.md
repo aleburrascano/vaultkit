@@ -26,6 +26,7 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ### Docs (continued)
 - **README now displays npm version, CI status, license, and Node-version badges** at the top. A fresh user landing on the README previously had no quick visual signal that the package was alive, maintained, or tested. Standard shields.io badges via the existing scoped-npm-package metadata and the `ci.yml` workflow.
+- **README adds an FAQ section** between Platform support and Troubleshooting. Eight common questions a fresh user actually has but had to infer from prose elsewhere -- can I use this without GitHub (no), does it cost money (no, except auth-gated Pages requires Pro+), where does my data go, can I use the vault with non-Claude-Code MCP clients (yes, manually -- vaultkit only registers with Claude Code), what's the difference between disconnect and destroy, can I have many vaults at once (yes, namespaced), what's `_vault.json` (Quartz config), where do vaults live on disk (`~/vaults/<name>` by default).
 
 ## [2.5.0] - 2026-05-01
 
