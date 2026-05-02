@@ -148,4 +148,20 @@ describe('_classifyGhFailure', () => {
     const cls = _classifyGhFailure(403, body, '', { 'retry-after': '60' });
     expect(cls.kind).toBe('auth_flagged');
   });
+
+  it('caps secondary-rate-limit backoffMs at 60s when Retry-After is absurdly large', () => {
+    // GitHub returning Retry-After: 999999 must not stall the process for
+    // ~11 days. Cap matches PROACTIVE_SLEEP_CAP_MS so consumer sleep is
+    // bounded without the consumer needing its own cap.
+    const body = JSON.stringify({ message: 'You have exceeded a secondary rate limit.' });
+    const cls = _classifyGhFailure(403, body, '', { 'retry-after': '999999' });
+    expect(cls.kind).toBe('rate_limited');
+    expect(cls.backoffMs).toBe(60_000);
+  });
+
+  it('caps HTTP 429 backoffMs at 60s when Retry-After is absurdly large', () => {
+    const cls = _classifyGhFailure(429, '', '', { 'retry-after': '999999' });
+    expect(cls.kind).toBe('rate_limited');
+    expect(cls.backoffMs).toBe(60_000);
+  });
 });

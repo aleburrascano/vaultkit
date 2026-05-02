@@ -94,15 +94,11 @@ export function _classifyGhFailure(
     /You have exceeded a secondary rate limit/i.test(blob) ||
     /abuse detection mechanism/i.test(blob)
   ) {
-    const retryAfter = parseInt(headers['retry-after'] ?? '', 10);
-    const backoffMs = (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60) * 1000;
-    return { kind: 'rate_limited', backoffMs, reason: 'secondary rate limit' };
+    return { kind: 'rate_limited', backoffMs: parseRetryAfterMs(headers), reason: 'secondary rate limit' };
   }
   // Primary rate limit (HTTP 429).
   if (status === 429 || /HTTP 429/.test(stderr)) {
-    const retryAfter = parseInt(headers['retry-after'] ?? '', 10);
-    const backoffMs = (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60) * 1000;
-    return { kind: 'rate_limited', backoffMs, reason: 'primary rate limit' };
+    return { kind: 'rate_limited', backoffMs: parseRetryAfterMs(headers), reason: 'primary rate limit' };
   }
   // 5xx server errors.
   if ((status !== undefined && status >= 500 && status < 600) || /HTTP 5\d\d/.test(stderr)) {
@@ -137,6 +133,17 @@ const RATE_LIMIT_PROACTIVE_THRESHOLD = 50;
 const RATE_LIMIT_RETRY_BUDGET = 3;
 const TRANSIENT_DELAYS = [1000, 2000, 4000];
 const PROACTIVE_SLEEP_CAP_MS = 60_000;
+const RATE_LIMIT_BACKOFF_CAP_MS = 60_000;
+
+// Bounded `Retry-After` parser. GitHub's secondary-rate-limit responses
+// usually request 60s; primary-rate-limit can request hourly resets. We
+// honor the requested value up to RATE_LIMIT_BACKOFF_CAP_MS so a hostile
+// (or buggy) `Retry-After: 999999` cannot stall the process for days.
+function parseRetryAfterMs(headers: Record<string, string>): number {
+  const retryAfter = parseInt(headers['retry-after'] ?? '', 10);
+  const requested = (Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 60) * 1000;
+  return Math.min(requested, RATE_LIMIT_BACKOFF_CAP_MS);
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise<void>(r => setTimeout(r, ms));
