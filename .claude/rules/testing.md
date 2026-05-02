@@ -3,7 +3,13 @@
 Test runner: `npm test` (runs vitest in single-pass mode against the TypeScript source directly — no build needed for tests).
 Watch mode: `npm run test:watch`
 
-**Tests are always live.** As of v2.5.0 there is no `VAULTKIT_LIVE_TEST` env-gate — every `npm test` run hits the real GitHub API and creates ephemeral `vk-live-*` repos against the authenticated `gh` account. Files are run sequentially (`fileParallelism: false` in `vitest.config.ts`) to avoid `~/.claude.json` write races. CI and Release both run the same suite using a dedicated PAT (`VAULTKIT_TEST_GH_TOKEN`) — see `.github/workflows/ci.yml` and `.github/workflows/release.yml`. Both workflows share the `vaultkit-live-tests` concurrency group so they cannot race on the same test account.
+**Tests are always live.** As of v2.5.0 there is no `VAULTKIT_LIVE_TEST` env-gate — every `npm test` run hits the real GitHub API and creates ephemeral `vk-live-*` repos against the authenticated `gh` account. Files are run sequentially (`fileParallelism: false` in `vitest.config.ts`) to avoid `~/.claude.json` write races. CI uses a dedicated PAT (`VAULTKIT_TEST_GH_TOKEN`) — see `.github/workflows/main.yml`. The `vaultkit-live-tests` concurrency group ensures only one CI run touches that account at a time.
+
+**Burst-rate hardening (2.7.1).** GitHub's secondary rate limit (~80 content-creating requests/minute) is the hard ceiling for live-test throughput. Two structural defenses keep us under it:
+- **Live tests skip on Windows** via `liveDescribe` (from `tests/helpers/live-describe.ts`). The 5 GitHub-touching live blocks (`init`, `destroy`, `connect`, `disconnect`, `visibility`) run only on the Ubuntu CI leg — Windows still gets the full mocked + check + build coverage.
+- **`status` and `verify` live tests are local-only** via `makeLocalVault` (from `tests/helpers/local-vault.ts`). They scaffold a vaultkit-shaped vault in a tmp dir + (for `status`) a local bare git repo as `origin` — no GitHub round-trip. Removed ~20 GH-API calls per CI run.
+
+Net per CI run: ~5 `vk-live-*` GitHub repo creates (down from 7 across both matrix legs in 2.7.0).
 
 Local prerequisites for `npm test` to pass:
 - `gh auth status` works (run `gh auth login` if not).
@@ -16,6 +22,8 @@ Test files live in `tests/` and mirror the source tree:
   - `logger.ts` — `silent` (no-op `Logger` singleton) and `arrayLogger(lines: string[])` (capture-style `Logger` for assertion checks). Use instead of inline `log: () => {}` or `log: (m) => arr.push(m)` — those don't satisfy the `Logger` interface.
   - `registry.ts` — `writeCfg(cfgPath, vaults)` writes a fake `~/.claude.json` with populated `mcpServers`. Accepts either `name → dir` shorthand or `name → { dir, hash? }` per vault. Use instead of hand-rolling `mcpServers` JSON in each test.
   - `git.ts` — `mockGitConfig({ name?, email? })` swaps the execa mock with a stub that responds to `git config user.name` / `user.email` and treats `gh auth status` as authenticated. Use only when those calls are the test's full execa surface; multi-handler tests keep their own inline `mockImplementation`.
+  - `live-describe.ts` — `liveDescribe` is `describe.skip` on Windows and `describe` everywhere else. Use it for `live: ...` blocks that touch real GitHub so they run only on the Ubuntu CI leg. Live blocks that DON'T touch GitHub (status, verify) use plain `describe` and run on both OSes.
+  - `local-vault.ts` — `makeLocalVault({ name, withRemote?, hashOverride? })` builds a vaultkit-shaped vault in a tmp dir, byte-copies the launcher template (so its SHA-256 matches `expected-sha256`), optionally wires up a local bare git repo as `origin`, and registers the vault in the real `~/.claude.json`. Returns `{ vaultDir, launcherHash, bareRepoDir, cleanup }`. Use it in live blocks that need a real vault layout but DON'T need a real GitHub remote — e.g. `status` (just reads `git status`) and `verify` (just hashes the launcher locally). The `name` MUST start with `vk-live-` so `tests/global-teardown.ts` sweeps the registry entry on crash.
 
 ## Testing discipline
 

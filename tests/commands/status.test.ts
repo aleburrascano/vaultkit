@@ -12,6 +12,7 @@ vi.mock('../../src/lib/git.js', async (importOriginal) => {
 
 import { getStatus } from '../../src/lib/git.js';
 import { writeCfg } from '../helpers/registry.js';
+import { makeLocalVault, type LocalVault } from '../helpers/local-vault.js';
 
 let tmp: string;
 
@@ -268,11 +269,20 @@ describe('S-12: single-vault detail mode — real git repo', () => {
   }, 15000);
 });
 
-// ── LIVE: status reports real vault state ─────────────────────────────────────
+// ── LIVE-LOCAL: status reports real vault state against a local-bare-repo origin ──
 
 const LIVE_VAULT = `vk-live-status-${Date.now()}`;
 
-describe('live: status reports real vault state', { timeout: 60_000 }, () => {
+// Converted from a GitHub-touching live test (created a real `vk-live-*`
+// repo per run) to a local-only test that uses a local bare git repo as
+// `origin`. status only needs a real vault layout + a real remote URL to
+// answer "ahead/behind/clean?" — it doesn't care that the remote is
+// GitHub. Removing the GitHub round-trip cuts ~10 GH-API calls per CI
+// run and lets this test run on Windows alongside Ubuntu (the
+// GitHub-touching live tests skip on Windows via liveDescribe).
+describe('live: status reports real vault state (local bare-repo origin)', { timeout: 30_000 }, () => {
+  let live: LocalVault;
+
   async function restoreReal() {
     const realGit = await vi.importActual<typeof import('../../src/lib/git.js')>('../../src/lib/git.js');
     vi.mocked(getStatus).mockImplementation(realGit.getStatus);
@@ -282,15 +292,13 @@ describe('live: status reports real vault state', { timeout: 60_000 }, () => {
 
   beforeAll(async () => {
     await restoreReal();
-    const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
-  }, 60_000);
+    live = await makeLocalVault({ name: LIVE_VAULT, withRemote: true });
+  }, 30_000);
 
   afterAll(async () => {
-    try { await restoreReal(); } catch { /* don't let mock-restore failures skip the destroy below */ }
-    const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
-  }, 60_000);
+    try { await restoreReal(); } catch { /* don't let mock-restore failures skip cleanup */ }
+    if (live) await live.cleanup();
+  });
 
   it('lists vault in summary mode', async () => {
     const { run } = await import('../../src/commands/status.js');

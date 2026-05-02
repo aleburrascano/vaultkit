@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { silent, arrayLogger } from '../helpers/logger.js';
+import { liveDescribe } from '../helpers/live-describe.js';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -206,9 +207,12 @@ describe('VI-8: private → public, enabling Pages', () => {
 
     await runVisibility('MyVault', 'public', { cfgPath, skipConfirm: true });
 
+    // setRepoVisibility migrated to `gh api --method PATCH /repos/<slug>
+    // -f visibility=public` for header-aware retry. Filter by the field
+    // payload instead of the old `edit ... public` shorthand.
     const repoEditCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
-      return Array.isArray(args) && args.includes('edit') && args.includes('public');
+      return Array.isArray(args) && args.includes('PATCH') && args.includes('visibility=public');
     });
     expect(repoEditCalls.length).toBeGreaterThan(0);
     expect(vi.mocked(enablePages)).toHaveBeenCalled();
@@ -228,9 +232,11 @@ describe('VI-9: public → private, disables Pages', () => {
 
     await runVisibility('MyVault', 'private', { cfgPath, skipConfirm: true });
 
+    // setRepoVisibility migrated to `gh api --method PATCH /repos/<slug>
+    // -f visibility=private` for header-aware retry.
     const repoEditCalls = vi.mocked(execa).mock.calls.filter(c => {
       const args = c[1] as unknown;
-      return Array.isArray(args) && args.includes('edit') && args.includes('private');
+      return Array.isArray(args) && args.includes('PATCH') && args.includes('visibility=private');
     });
     expect(repoEditCalls.length).toBeGreaterThan(0);
     expect(vi.mocked(disablePages)).toHaveBeenCalled();
@@ -321,7 +327,7 @@ describe('VI-13: deploy added, pushed via PR', () => {
 
 const LIVE_VAULT = `vk-live-visibility-${Date.now()}`;
 
-describe('live: visibility toggles real GitHub repo', { timeout: 60_000 }, () => {
+liveDescribe('live: visibility toggles real GitHub repo', { timeout: 60_000 }, () => {
   async function restoreReal() {
     const { execa: realExeca } = await vi.importActual<typeof import('execa')>('execa');
     vi.mocked(execa).mockImplementation(realExeca as never);

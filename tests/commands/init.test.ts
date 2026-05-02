@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, mkdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { silent, arrayLogger } from '../helpers/logger.js';
+import { liveDescribe } from '../helpers/live-describe.js';
 
 vi.mock('@inquirer/prompts', () => ({
   confirm: vi.fn(),
@@ -297,7 +298,9 @@ describe('I-11: claude not found', () => {
 
 const LIVE_VAULT = `vk-live-init-${Date.now()}`;
 
-describe('live: init creates real GitHub repo', { timeout: 60_000 }, () => {
+// liveDescribe skips on Windows — see tests/helpers/live-describe.ts for
+// the rate-limit rationale (live tests run only on Ubuntu in CI).
+liveDescribe('live: init creates real GitHub repo', { timeout: 60_000 }, () => {
   async function restoreReal() {
     const { execa: realExeca } = await vi.importActual<typeof import('execa')>('execa');
     vi.mocked(execa).mockImplementation(realExeca as never);

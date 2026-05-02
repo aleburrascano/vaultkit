@@ -11,6 +11,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ### Added
 - **`VaultkitErrorCode.RATE_LIMITED`** — exit code 13. Surfaces from `ghJson` when the secondary-rate-limit retry budget is exhausted (3 retries with `Retry-After`-or-60s waits between). Distinct from `AUTH_REQUIRED` (which is the irrecoverable abuse-flag case).
+- **Live-test burst reduction.** Two structural changes to keep CI under GitHub's secondary rate limit (~80 content-creating requests/minute):
+  - **Live tests skip on Windows** via the new `liveDescribe` helper in [tests/helpers/live-describe.ts](tests/helpers/live-describe.ts) (`describe.skip` on win32, plain `describe` elsewhere). The 5 GitHub-touching live blocks (`init`, `destroy`, `connect`, `disconnect`, `visibility`) run only on Ubuntu in CI; Windows still runs the full mocked + check + build matrix legs. Cuts per-tag-push GH-API burst from two matrix legs to one.
+  - **`status` and `verify` live tests converted to local-only** via the new `makeLocalVault` helper in [tests/helpers/local-vault.ts](tests/helpers/local-vault.ts). `status` now uses a local bare git repo as `origin` (it only needs a real remote URL to answer ahead/behind/clean — doesn't care that it's GitHub); `verify` runs entirely off the byte-copied launcher template (no remote needed at all). Removes ~20 GH-API calls per CI run and lets these two tests run on Windows alongside Ubuntu, broadening OS coverage. Net: from 7 GitHub-touching live tests to 5, only on the Ubuntu leg.
 
 ## [2.7.0] - 2026-05-02
 

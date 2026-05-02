@@ -12,6 +12,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { silent, arrayLogger } from '../helpers/logger.js';
+import { liveDescribe } from '../helpers/live-describe.js';
 
 vi.mock('@inquirer/prompts', () => ({ confirm: vi.fn() }));
 vi.mock('execa', async (importOriginal) => {
@@ -209,7 +210,7 @@ describe('TR-5: successful connect', () => {
 
 const LIVE_VAULT = `vk-live-connect-${Date.now()}`;
 
-describe('live: connect clones real GitHub repo', { timeout: 90_000 }, () => {
+liveDescribe('live: connect clones real GitHub repo', { timeout: 90_000 }, () => {
   let repoSlug = '';
 
   async function restoreReal() {

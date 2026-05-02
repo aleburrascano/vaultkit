@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { silent } from '../helpers/logger.js';
 import { writeCfg } from '../helpers/registry.js';
+import { liveDescribe } from '../helpers/live-describe.js';
 
 let tmp: string;
 beforeEach(() => { tmp = mkdtempSync(join(tmpdir(), 'vk-disconnect-test-')); });
@@ -60,7 +61,7 @@ describe('disconnect command', () => {
 
 const LIVE_VAULT = `vk-live-disconnect-${Date.now()}`;
 
-describe('live: disconnect removes local dir, keeps GitHub repo', { timeout: 60_000 }, () => {
+liveDescribe('live: disconnect removes local dir, keeps GitHub repo', { timeout: 60_000 }, () => {
   beforeAll(async () => {
     const { run } = await import('../../src/commands/init.js');
     await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });

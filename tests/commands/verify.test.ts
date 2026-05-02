@@ -24,6 +24,7 @@ import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { findTool } from '../../src/lib/platform.js';
 import { writeCfg } from '../helpers/registry.js';
+import { makeLocalVault, type LocalVault } from '../helpers/local-vault.js';
 
 let tmp: string;
 
@@ -219,11 +220,21 @@ describe('V-8: no pinned hash', () => {
   });
 });
 
-// ── LIVE: verify checks real launcher hash ────────────────────────────────────
+// ── LIVE-LOCAL: verify checks real launcher hash on a local-only vault ────────
 
 const LIVE_VAULT = `vk-live-verify-${Date.now()}`;
 
-describe('live: verify checks real launcher hash', { timeout: 60_000 }, () => {
+// Converted from a GitHub-touching live test (created a real `vk-live-*`
+// repo per run) to a fully-local test. verify computes SHA-256 of the
+// launcher and compares it against the registered expected-hash — it
+// never talks to GitHub or git. The previous test only used `init` to
+// bootstrap a real vault layout; we now lay that down directly via
+// makeLocalVault, which copies the byte-immutable launcher template
+// the same way init does. This cuts ~10 GH-API calls per CI run and
+// lets the test run on Windows alongside Ubuntu.
+describe('live: verify checks real launcher hash (local-only)', { timeout: 30_000 }, () => {
+  let live: LocalVault;
+
   async function restoreReal() {
     const { execa: realExeca } = await vi.importActual<typeof import('execa')>('execa');
     vi.mocked(execa).mockImplementation(realExeca as never);
@@ -235,15 +246,13 @@ describe('live: verify checks real launcher hash', { timeout: 60_000 }, () => {
 
   beforeAll(async () => {
     await restoreReal();
-    const { run } = await import('../../src/commands/init.js');
-    await run(LIVE_VAULT, { publishMode: 'private', skipInstallCheck: true, log: silent });
-  }, 60_000);
+    live = await makeLocalVault({ name: LIVE_VAULT });
+  }, 30_000);
 
   afterAll(async () => {
-    try { await restoreReal(); } catch { /* don't let mock-restore failures skip the destroy below */ }
-    const { run } = await import('../../src/commands/destroy.js');
-    await run(LIVE_VAULT, { skipConfirm: true, skipMcp: true, confirmName: LIVE_VAULT, log: silent }).catch(() => {});
-  }, 60_000);
+    try { await restoreReal(); } catch { /* don't let mock-restore failures skip cleanup */ }
+    if (live) await live.cleanup();
+  });
 
   it('verifies launcher hash matches pinned hash', async () => {
     const { run } = await import('../../src/commands/verify.js');
