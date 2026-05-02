@@ -30,6 +30,36 @@ export function getDeployTemplate(): string {
   return join(SCRIPT_DIR, '../../lib/deploy.yml.tmpl');
 }
 
+/**
+ * Absolute path to the freshness GitHub Action template
+ * (`lib/freshness.yml.tmpl`). Scheduled weekly run that invokes
+ * `vaultkit refresh --vault-dir .` and opens a PR with the report.
+ * Same dev/post-build resolution as `getLauncherTemplate`.
+ */
+export function getFreshnessTemplate(): string {
+  return join(SCRIPT_DIR, '../../lib/freshness.yml.tmpl');
+}
+
+/**
+ * Absolute path to the PR description scaffold
+ * (`lib/pr-template.md.tmpl`). Asks contributors to declare the
+ * Claude Code session config they used (model, thinking, effort)
+ * when applying a freshness report. Same resolution as above.
+ */
+export function getPrTemplate(): string {
+  return join(SCRIPT_DIR, '../../lib/pr-template.md.tmpl');
+}
+
+/**
+ * Absolute path to the project-scoped Claude Code settings template
+ * (`lib/claude-settings.json.tmpl`). Pins recommended model defaults
+ * for refresh sessions where the vault directory is the cwd.
+ * Same resolution as above.
+ */
+export function getClaudeSettingsTemplate(): string {
+  return join(SCRIPT_DIR, '../../lib/claude-settings.json.tmpl');
+}
+
 export function isWindows(): boolean {
   return process.platform === 'win32';
 }

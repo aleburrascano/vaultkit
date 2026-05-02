@@ -32,6 +32,10 @@ export const VAULT_FILES = {
   VAULT_JSON: '_vault.json',
   /** Marker that a directory is an Obsidian vault. */
   OBSIDIAN_DIR: '.obsidian',
+  /** Project-scoped Claude Code settings (model + permissions defaults for refresh sessions). */
+  CLAUDE_SETTINGS: '.claude/settings.json',
+  /** PR description scaffold for collaborator session-config disclosure. */
+  PR_TEMPLATE: '.github/pull_request_template.md',
 } as const;
 
 /** Top-level subdirectories of a vaultkit vault. */
@@ -50,6 +54,8 @@ export const WORKFLOW_FILES = {
   DEPLOY: 'deploy.yml',
   /** PR-time guard against duplicate filenames in raw/. */
   DUPLICATE_CHECK: 'duplicate-check.yml',
+  /** Scheduled freshness report — runs `vaultkit refresh` weekly and opens a PR. */
+  FRESHNESS: 'freshness.yml',
 } as const;
 
 /** Validation constraints on vault identifiers. */
