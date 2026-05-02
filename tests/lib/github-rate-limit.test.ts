@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   _parseGhIncludeOutput,
   _classifyGhFailure,
-} from '../../src/lib/github.js';
+} from '../../src/lib/gh-retry.js';
 
 describe('_parseGhIncludeOutput', () => {
   it('parses a 200 response with rate-limit headers and a JSON body', () => {

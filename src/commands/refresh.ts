@@ -1,10 +1,10 @@
 import { readdirSync, readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, posix } from 'node:path';
-import { execa } from 'execa';
 import { Vault } from '../lib/vault.js';
 import { VAULT_DIRS } from '../lib/constants.js';
 import { compareSource } from '../lib/text-compare.js';
 import { findTool } from '../lib/platform.js';
+import { ghJson } from '../lib/gh-retry.js';
 import { ConsoleLogger } from '../lib/logger.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
@@ -116,7 +116,7 @@ export function loadSources(vaultDir: string): SourceEntry[] {
   return sources;
 }
 
-async function checkGitSource(entry: SourceEntry, slug: string, ghPath: string): Promise<GitCheck> {
+async function checkGitSource(entry: SourceEntry, slug: string): Promise<GitCheck> {
   const args = ['api', `repos/${slug}/commits`];
   if (entry.sourceDate) {
     args.push('-X', 'GET', '-F', `since=${entry.sourceDate}`, '-F', 'per_page=30');
@@ -124,18 +124,8 @@ async function checkGitSource(entry: SourceEntry, slug: string, ghPath: string):
     args.push('-X', 'GET', '-F', 'per_page=10');
   }
   try {
-    const result = await execa(ghPath, args, { reject: false });
-    if (result.exitCode !== 0) {
-      return {
-        kind: 'git',
-        entry,
-        slug,
-        newCommits: 0,
-        recentSubjects: [],
-        error: String(result.stderr ?? '').trim() || `gh exit ${result.exitCode}`,
-      };
-    }
-    const commits = JSON.parse(String(result.stdout ?? '[]')) as Array<{ commit?: { message?: string } }>;
+    const stdout = await ghJson(...args);
+    const commits = JSON.parse(stdout || '[]') as Array<{ commit?: { message?: string } }>;
     const subjects = commits
       .map(c => (c.commit?.message ?? '').split(/\r?\n/)[0] ?? '')
       .filter(Boolean);
@@ -146,10 +136,10 @@ async function checkGitSource(entry: SourceEntry, slug: string, ghPath: string):
   }
 }
 
-async function checkSource(entry: SourceEntry, ghPath: string | null): Promise<CheckResult> {
+async function checkSource(entry: SourceEntry, ghAvailable: boolean): Promise<CheckResult> {
   if (!entry.url) return { kind: 'no-url', entry };
   const slug = detectGithubSlug(entry.url);
-  if (slug && ghPath) return checkGitSource(entry, slug, ghPath);
+  if (slug && ghAvailable) return checkGitSource(entry, slug);
   const result = await compareSource(entry.url, entry.body);
   if (result.kind === 'compared') return { kind: 'compared', entry, similarity: result.similarity };
   return { kind: 'unfetchable', entry, reason: result.reason };
@@ -251,8 +241,8 @@ export async function run(
     return { reportPath: null, sourceCount: 0, findingCount: 0 };
   }
 
-  const ghPath = await findTool('gh');
-  const checks = await Promise.all(sources.map(s => checkSource(s, ghPath)));
+  const ghAvailable = (await findTool('gh')) !== null;
+  const checks = await Promise.all(sources.map(s => checkSource(s, ghAvailable)));
 
   const date = new Date().toISOString().slice(0, 10);
   const { report, findingCount } = formatReport(checks, date);
