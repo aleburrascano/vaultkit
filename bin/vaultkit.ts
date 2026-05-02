@@ -45,6 +45,45 @@ program
   .version(versionString)
   .option('-v, --verbose', 'enable trace output');
 
+// Categorized root help -- mirrors the README's Commands section so the CLI's
+// first-impression help and the README's first-impression help match. Only
+// overrides the root program; each subcommand keeps its own addHelpText output
+// (since helpInformation is per-instance).
+program.helpInformation = () => `Usage: vaultkit [options] [command]
+
+Obsidian wiki management -- make an Obsidian vault searchable by Claude Code.
+
+Options:
+  -V, --version                       output the version + runtime info
+  -v, --verbose                       enable trace output
+  -h, --help                          display this help
+
+Commands:
+  FIRST-TIME SETUP
+    setup                             Verify + install every prerequisite (run once after install)
+
+  CREATE & CONNECT
+    init <name>                       Create a new vault from scratch
+    connect <input>                   Clone someone else's vault and register it
+
+  EVERYDAY USE
+    status [name]                     See your vaults + git state (or detailed status for one)
+    pull                              Sync all vaults from their upstream
+    backup <name>                     Snapshot a vault to a local zip
+
+  WHEN SOMETHING'S WRONG
+    doctor                            Check environment + flag broken vaults
+    update <name>                     Refresh launcher and restore missing layout files
+    verify <name>                     Inspect launcher SHA-256 and re-pin if needed
+
+  CHANGE OR REMOVE
+    visibility <name> <mode>          Toggle public / private / auth-gated
+    disconnect <name>                 Remove vault locally and from MCP (keeps GitHub repo)
+    destroy <name>                    Delete vault locally, on GitHub, and from MCP
+
+Run 'vaultkit <command> --help' for detailed usage and examples for any command.
+`;
+
 program.hook('preAction', () => {
   if (program.opts().verbose) process.env.VAULTKIT_VERBOSE = '1';
 });

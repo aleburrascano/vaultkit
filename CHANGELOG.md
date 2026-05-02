@@ -10,6 +10,7 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ### Changed
 - **`vaultkit --version` includes runtime info.** Output goes from `2.5.0` to `2.5.0 (node v22.x.x, <platform> <arch>)`, matching the README's existing promise of "version + runtime info". One-line bug-report-friendly format that also surfaces node-version mismatches when troubleshooting.
+- **`vaultkit help` (and `vaultkit --help`) now show the README's categorized command list** (FIRST-TIME SETUP / CREATE & CONNECT / EVERYDAY USE / WHEN SOMETHING'S WRONG / CHANGE OR REMOVE) instead of commander's flat alphabetical-by-registration default. Aligns the CLI's first-impression help with the README's first-impression help so users see the same mental model on either surface. Implementation overrides `program.helpInformation` only on the root command; per-subcommand `--help` (init, connect, etc.) is unaffected and continues to use the `addHelpText` blocks added in this release.
 
 ### Docs
 - **README `connect` example now shows the SSH URL form** (`git@github.com:owner/repo`). The parser in [src/commands/connect.ts](src/commands/connect.ts) `_normalizeInput` already accepted SSH URLs and `.git` suffixes (covered by `tests/commands/connect.test.ts:72-73`); the README only documented two of three forms, so users copy-pasting from `gh repo view` thought they were getting away with something undocumented.
