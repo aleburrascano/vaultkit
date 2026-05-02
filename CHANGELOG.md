@@ -4,6 +4,21 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+### Added
+- **`vaultkit refresh [name]`** — new command that checks every source in `raw/` for upstream changes and writes a dated freshness report to `wiki/_freshness/<YYYY-MM-DD>.md`. Walks `raw/` recursively, reads each markdown file's frontmatter URL + clip date, and classifies: GitHub URLs go through `gh api repos/<owner>/<repo>/commits?since=<sourceDate>` (commit-since-clip count); other URLs go through HTTP fetch + Mozilla Readability text-only compare against the local clip's plain-text projection (similarity threshold 0.95); paywalls / SPAs / 4xx / 5xx route to a "manual review" section. Output is skipped entirely when there are no findings. Accepts `--vault-dir <path>` to bypass the registry for CI use.
+- **`.github/workflows/freshness.yml`** — scheduled GitHub Action installed at vault scaffold time. Weekly cron (Sundays 12:00 UTC) plus `workflow_dispatch`. Runs `npx -y @aleburrascano/vaultkit refresh --vault-dir .`, commits the new report under `wiki/_freshness/`, opens a PR. No Anthropic secrets — uses default `GITHUB_TOKEN` only.
+- **`.claude/settings.json`** — project-scoped Claude Code settings installed at vault scaffold time, pinning `model: "sonnet"` and `permissions.additionalDirectories: ["raw", "wiki"]`. Applies when collaborators `cd` into the vault for a refresh session.
+- **`.github/pull_request_template.md`** — PR description scaffold installed at vault scaffold time, asking contributors to declare their Claude Code session config (model, thinking, effort) and which sources they incorporated. Visibility for reviewers, not enforcement.
+- **CLAUDE.md template** gains a "Wiki Style & Refresh Policy" section wrapped in `<!-- vaultkit:wiki-style:start/end -->` markers. Carries the patch-flow constraint ("never regenerate a wiki page from sources"), the `WebFetch` handoff for non-git sources, the cd-into-vault refresh-session workflow note, and a recommended-settings stub for collaborator convergence.
+- **Marker-based merge for vaultkit-managed CLAUDE.md sections.** New `src/lib/claude-md-merge.ts` with `renderManagedSection(id, body)` and `mergeManagedSection(existingMd, id, body, headingName)` returning `{ merged, action: 'replaced' | 'appended' | 'manual' }`. `vaultkit update` uses this to evolve the wiki-style section across releases without disturbing user edits — three branches: markers present → replace; markers absent + heading absent → append; heading present without markers → don't touch, print a copy-paste snippet.
+- **`src/lib/text-compare.ts`** — non-git source freshness check helper. Exports `plainTextFromMarkdown` (frontmatter + markdown formatting → plain text), `similarity` (Jaccard over word sets), and `compareSource` (HTTP fetch + Readability extraction → comparison). Dynamically imports `jsdom` + `@mozilla/readability` so the load cost lands only on `vaultkit refresh`.
+
+### Changed
+- **`vaultkit update`** now also reconciles the CLAUDE.md "Wiki Style & Refresh Policy" section via `mergeManagedSection`. Existing vaults without the section get it appended; vaults whose section content has drifted from the template get the managed region replaced (markers preserve the boundaries); vaults where a user has hand-edited a `## Wiki Style & Refresh Policy` heading without markers see a paste-snippet log and no rewrite.
+
+### Dependencies
+- New runtime: `@mozilla/readability` ^0.6, `jsdom` ^29 (used only by `vaultkit refresh`'s non-git compare path; dynamically imported so non-refresh commands don't pay the JSDOM startup tax). Dev: `@types/jsdom`.
+
 ## [2.6.1] - 2026-05-02
 
 ### Fixed

@@ -73,15 +73,22 @@ describe('U-2: already up to date, re-pins', () => {
     makeGitDir(vaultDir);
     // Copy current template so hashes match
     copyFileSync(TMPL_PATH, join(vaultDir, '.mcp-start.js'));
-    // Create all layout files so nothing is missing
-    writeFileSync(join(vaultDir, 'CLAUDE.md'), '');
+    // Create all layout files so nothing is missing. CLAUDE.md must include
+    // the marker-wrapped wiki-style section, otherwise update's merge step
+    // will append it and treat the vault as needing a commit.
+    const { renderClaudeMd } = await import('../../src/lib/vault-templates.js');
+    writeFileSync(join(vaultDir, 'CLAUDE.md'), renderClaudeMd('UpToDate'));
     writeFileSync(join(vaultDir, 'README.md'), '');
     writeFileSync(join(vaultDir, 'index.md'), '');
     writeFileSync(join(vaultDir, 'log.md'), '');
     writeFileSync(join(vaultDir, '.gitignore'), '');
     writeFileSync(join(vaultDir, '.gitattributes'), '');
+    mkdirSync(join(vaultDir, '.claude'), { recursive: true });
+    writeFileSync(join(vaultDir, '.claude', 'settings.json'), '');
     mkdirSync(join(vaultDir, '.github', 'workflows'), { recursive: true });
+    writeFileSync(join(vaultDir, '.github', 'pull_request_template.md'), '');
     writeFileSync(join(vaultDir, '.github', 'workflows', 'duplicate-check.yml'), '');
+    writeFileSync(join(vaultDir, '.github', 'workflows', 'freshness.yml'), '');
     mkdirSync(join(vaultDir, 'raw'), { recursive: true });
     writeFileSync(join(vaultDir, 'raw', '.gitkeep'), '');
     mkdirSync(join(vaultDir, 'wiki'), { recursive: true });

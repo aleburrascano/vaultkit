@@ -1,4 +1,5 @@
-import { copyFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { confirm } from '@inquirer/prompts';
 import { execa } from 'execa';
 import { Vault, sha256 } from '../lib/vault.js';
@@ -10,6 +11,12 @@ import { ConsoleLogger } from '../lib/logger.js';
 import { VaultkitError } from '../lib/errors.js';
 import { PROMPTS, LABELS } from '../lib/messages.js';
 import { VAULT_FILES } from '../lib/constants.js';
+import { mergeManagedSection, renderManagedSection } from '../lib/claude-md-merge.js';
+import {
+  WIKI_STYLE_SECTION_ID,
+  WIKI_STYLE_HEADING,
+  renderWikiStyleSection,
+} from '../lib/vault-templates.js';
 import type { CommandModule, RunOptions } from '../types.js';
 
 export interface UpdateOptions extends RunOptions {
@@ -70,6 +77,34 @@ export async function run(
   writeLayoutFiles(vault.dir, { name, siteUrl: '' }, missing);
   const added = [...missing];
 
+  // Apply: merge the wiki-style section into existing CLAUDE.md (no-op if
+  // CLAUDE.md was just freshly created via writeLayoutFiles above — that
+  // path already includes the marker-wrapped section via renderClaudeMd).
+  let claudeMdMerged = false;
+  const claudeMdPath = join(vault.dir, VAULT_FILES.CLAUDE_MD);
+  if (existsSync(claudeMdPath) && !missing.includes(VAULT_FILES.CLAUDE_MD)) {
+    const existing = readFileSync(claudeMdPath, 'utf8');
+    const result = mergeManagedSection(
+      existing,
+      WIKI_STYLE_SECTION_ID,
+      renderWikiStyleSection(),
+      WIKI_STYLE_HEADING,
+    );
+    if (result.merged !== existing && (result.action === 'replaced' || result.action === 'appended')) {
+      writeFileSync(claudeMdPath, result.merged);
+      claudeMdMerged = true;
+      const verb = result.action === 'replaced' ? 'updated' : 'appended';
+      log.info(`  ${VAULT_FILES.CLAUDE_MD}: "${WIKI_STYLE_HEADING}" section ${verb}.`);
+    } else if (result.action === 'manual') {
+      log.warn(`  ${VAULT_FILES.CLAUDE_MD}: existing "${WIKI_STYLE_HEADING}" heading found without vaultkit markers.`);
+      log.info('  vaultkit will not overwrite a hand-edited section. To opt into managed merges, replace your section with:');
+      log.info('');
+      const snippet = renderManagedSection(WIKI_STYLE_SECTION_ID, renderWikiStyleSection());
+      for (const line of snippet.split('\n')) log.info(`    ${line}`);
+      log.info('');
+    }
+  }
+
   // Re-pin MCP
   const claudePath = await findTool('claude');
   if (claudePath) {
@@ -84,7 +119,7 @@ export async function run(
   }
 
   const launcherChanged = afterHash !== beforeHash;
-  if (!launcherChanged && added.length === 0) {
+  if (!launcherChanged && added.length === 0 && !claudeMdMerged) {
     log.info('');
     log.info('  Nothing to commit.');
     log.info('Done. Restart Claude Code to apply the re-pinned registration.');
@@ -95,6 +130,7 @@ export async function run(
   const filesToStage: string[] = [];
   if (launcherChanged) filesToStage.push(VAULT_FILES.LAUNCHER);
   filesToStage.push(...added);
+  if (claudeMdMerged) filesToStage.push(VAULT_FILES.CLAUDE_MD);
 
   await add(vault.dir, filesToStage);
 

@@ -64,6 +64,7 @@ CREATE & CONNECT
 EVERYDAY USE
   vaultkit status [name]              See your vaults + git state (or detailed status for one)
   vaultkit pull                       Sync all vaults from their upstream
+  vaultkit refresh [name]             Check sources for upstream changes and write a freshness report
   vaultkit backup <name>              Snapshot a vault to a local zip
 
 WHEN SOMETHING'S WRONG

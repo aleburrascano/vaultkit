@@ -37,6 +37,7 @@ paths:
 | disconnect | src/commands/disconnect.ts |
 | destroy    | src/commands/destroy.ts    |
 | pull       | src/commands/pull.ts       |
+| refresh    | src/commands/refresh.ts    |
 | update     | src/commands/update.ts     |
 | doctor     | src/commands/doctor.ts     |
 | verify     | src/commands/verify.ts     |

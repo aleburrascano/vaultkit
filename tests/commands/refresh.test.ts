@@ -88,11 +88,11 @@ describe('loadSources', () => {
     const sources = loadSources(tmp);
     expect(sources.length).toBe(3);
     const byPath = Object.fromEntries(sources.map(s => [s.filePath, s]));
-    expect(byPath['raw/articles/one.md'].url).toBe('https://github.com/owner/repo');
-    expect(byPath['raw/articles/one.md'].sourceDate).toBe('2026-04-01');
-    expect(byPath['raw/articles/one.md'].body).toBe('body one');
-    expect(byPath['raw/papers/two.md'].url).toBe('https://arxiv.org/abs/1234');
-    expect(byPath['raw/articles/noFrontmatter.md'].url).toBe('');
+    expect(byPath['raw/articles/one.md']?.url).toBe('https://github.com/owner/repo');
+    expect(byPath['raw/articles/one.md']?.sourceDate).toBe('2026-04-01');
+    expect(byPath['raw/articles/one.md']?.body).toBe('body one');
+    expect(byPath['raw/papers/two.md']?.url).toBe('https://arxiv.org/abs/1234');
+    expect(byPath['raw/articles/noFrontmatter.md']?.url).toBe('');
   });
 
   it('skips non-markdown files', () => {
