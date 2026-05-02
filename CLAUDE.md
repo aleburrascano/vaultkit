@@ -41,7 +41,7 @@ vaultkit <command>
 - **Bug fix:** failing test first. Show it fail, fix it, show it pass. Run full suite.
 - **Feature:** run full suite before and after.
 - **Refactor:** all tests green before, all tests green after.
-- **Change cadence:** small atomic commits, every commit independently shippable (`check`, `build`, `test` all green). Decompose multi-step changes into commits that each leave the world intact (introduce-new-then-remove-old, not rip-and-replace). The TypeScript migration (commits `a0a22f0` → `e0543a2`, 23 commits across 7 phases) is the canonical model.
+- **Commit cadence:** opted in to global rule §11 — commit each independently-shippable step as you go (must leave `check`, `build`, `test` green). Decompose multi-step changes; introduce-new-then-remove-old, not rip-and-replace. The TypeScript migration (`a0a22f0` → `e0543a2`, 23 commits / 7 phases) is the canonical model.
 
 ## Known Hallucination Patterns
 @.claude/rules/hallucination-patterns.md
