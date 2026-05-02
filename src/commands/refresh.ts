@@ -141,7 +141,7 @@ async function checkGitSource(entry: SourceEntry, slug: string, ghPath: string):
       .filter(Boolean);
     return { kind: 'git', entry, slug, newCommits: commits.length, recentSubjects: subjects.slice(0, 5) };
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = (err as { message?: string })?.message ?? String(err);
     return { kind: 'git', entry, slug, newCommits: 0, recentSubjects: [], error: msg };
   }
 }

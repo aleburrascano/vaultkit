@@ -130,11 +130,12 @@ export async function pull(dir: string, { timeout = 30000, ffOnly = true }: Pull
       timeout,
     });
   } catch (err) {
-    const e = err as { timedOut?: boolean; code?: string; message?: string };
-    if (e.timedOut || e.code === 'ETIMEDOUT') {
+    const timedOut = (err as { timedOut?: boolean })?.timedOut === true || (err as { code?: string })?.code === 'ETIMEDOUT';
+    if (timedOut) {
       return { success: false, upToDate: false, timedOut: true, stderr: '' };
     }
-    return { success: false, upToDate: false, timedOut: false, stderr: String(e.message ?? '') };
+    const message = (err as { message?: string })?.message ?? '';
+    return { success: false, upToDate: false, timedOut: false, stderr: String(message) };
   }
 
   if (result.timedOut) {

@@ -86,7 +86,7 @@ export async function compareSource(
       clearTimeout(timer);
     }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = (err as { message?: string })?.message ?? String(err);
     return { kind: 'unfetchable', reason: `fetch failed: ${msg}` };
   }
 
@@ -108,7 +108,7 @@ export async function compareSource(
     }
     articleText = String(article.textContent).trim().replace(/\s+/g, ' ');
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const msg = (err as { message?: string })?.message ?? String(err);
     return { kind: 'unfetchable', reason: `article extraction failed: ${msg}` };
   }
 
