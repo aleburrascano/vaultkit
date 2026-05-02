@@ -4,6 +4,8 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 
 ## [Unreleased]
 
+## [2.7.0] - 2026-05-02
+
 ### Added
 - **`vaultkit refresh [name]`** — new command that checks every source in `raw/` for upstream changes and writes a dated freshness report to `wiki/_freshness/<YYYY-MM-DD>.md`. Walks `raw/` recursively, reads each markdown file's frontmatter URL + clip date, and classifies: GitHub URLs go through `gh api repos/<owner>/<repo>/commits?since=<sourceDate>` (commit-since-clip count); other URLs go through HTTP fetch + Mozilla Readability text-only compare against the local clip's plain-text projection (similarity threshold 0.95); paywalls / SPAs / 4xx / 5xx route to a "manual review" section. Output is skipped entirely when there are no findings. Accepts `--vault-dir <path>` to bypass the registry for CI use.
 - **`.github/workflows/freshness.yml`** — scheduled GitHub Action installed at vault scaffold time. Weekly cron (Sundays 12:00 UTC) plus `workflow_dispatch`. Runs `npx -y @aleburrascano/vaultkit refresh --vault-dir .`, commits the new report under `wiki/_freshness/`, opens a PR. No Anthropic secrets — uses default `GITHUB_TOKEN` only.
