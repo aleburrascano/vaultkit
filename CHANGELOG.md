@@ -24,6 +24,9 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 ### Removed
 - **`install.sh`** -- the 16-line bash wrapper around `npm install -g @aleburrascano/vaultkit`. Not in `package.json#files`, not referenced from README, duplicated by the README's standard install line. Pure dead code post-TS-migration; SECURITY.md's mention of it was the only thing keeping it semi-discoverable, and that mention is now corrected.
 
+### Docs (continued)
+- **README now displays npm version, CI status, license, and Node-version badges** at the top. A fresh user landing on the README previously had no quick visual signal that the package was alive, maintained, or tested. Standard shields.io badges via the existing scoped-npm-package metadata and the `ci.yml` workflow.
+
 ## [2.5.0] - 2026-05-01
 
 ### Fixed

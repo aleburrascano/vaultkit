@@ -1,5 +1,10 @@
 # vaultkit
 
+[![npm](https://img.shields.io/npm/v/@aleburrascano/vaultkit.svg?label=npm)](https://www.npmjs.com/package/@aleburrascano/vaultkit)
+[![CI](https://github.com/aleburrascano/vaultkit/actions/workflows/ci.yml/badge.svg)](https://github.com/aleburrascano/vaultkit/actions/workflows/ci.yml)
+[![License](https://img.shields.io/npm/l/@aleburrascano/vaultkit.svg)](LICENSE)
+[![Node](https://img.shields.io/node/v/@aleburrascano/vaultkit.svg)](package.json)
+
 Make an Obsidian wiki searchable by Claude Code — yours, your team's, or someone else's.
 
 [Obsidian](https://obsidian.md) is a free Markdown note-taking app where a "vault" is just a folder of `.md` files on your disk. vaultkit takes that vault, backs it with a GitHub repo, and registers it as a Claude Code MCP server — so every Claude Code session in every project can full-text search and read your notes, with no per-project setup. Connect as many vaults as you want; each lives under its own MCP namespace and stays in sync with upstream automatically.
