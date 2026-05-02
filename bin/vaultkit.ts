@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { isVaultkitError, EXIT_CODES } from '../src/lib/errors.js';
+import { ConsoleLogger } from '../src/lib/logger.js';
+import { checkForUpdate } from '../src/lib/update-check.js';
 import type { PublishMode } from '../src/lib/constants.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +27,7 @@ async function wrap(fn: () => Promise<void>, commandName: string, args: string[]
   try {
     await fn();
     auditLog(commandName, args, 0, start);
+    checkForUpdate(pkg.version, new ConsoleLogger());
     if (verbose) console.error(`[debug] ${commandName} ok (${Date.now() - start}ms)`);
   } catch (err) {
     const exitCode = isVaultkitError(err) ? EXIT_CODES[err.code] : 1;

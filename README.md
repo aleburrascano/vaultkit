@@ -274,6 +274,7 @@ Run `vaultkit doctor` periodically — it surfaces hash drift and missing pins a
 | `VAULTKIT_LOG` | *(unset)* | If set, every `vaultkit` invocation appends a tab-separated audit line: `timestamp\tcommand\targs\texit=N\t<duration>ms` |
 | `VAULTKIT_PULL_TIMEOUT` | `30000` | Per-vault timeout in milliseconds for `vaultkit pull` |
 | `VAULTKIT_VERBOSE` | *(unset)* | Set automatically by the `--verbose` flag — scripts emit trace output to stderr when it's `1` |
+| `VAULTKIT_NO_UPDATE_CHECK` | *(unset)* | If set to `1`, suppresses the once-per-24h "newer version available" notification. Useful in CI or for scripted callers that parse stderr |
 
 Set in your shell profile to override the default:
 
