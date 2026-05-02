@@ -213,6 +213,29 @@ Multiple wikis are available simultaneously under their own MCP namespaces:
 
 The launcher itself is small (~70 lines — see [`lib/mcp-start.js.tmpl`](./lib/mcp-start.js.tmpl) for the canonical bytes). On startup it does a SHA-256 self-check, runs a guarded `git fetch`, and then spawns [`obsidian-mcp-pro`](https://www.npmjs.com/package/obsidian-mcp-pro) via `npx` — that's the package that exposes the `search_notes` / `get_note` / etc. tools to Claude Code. Trust thus extends to: vaultkit itself, the per-vault launcher (SHA-pinned), the vault's git history, and `obsidian-mcp-pro`.
 
+The trust chain on every Claude Code session start, end-to-end:
+
+```
+  ~/.claude.json  ── pins H = SHA-256 of <vault>/.mcp-start.js
+       │              (set at registration time -- TOFU prompt; layer 1)
+       │ spawn
+       ▼
+  <vault>/.mcp-start.js   (~70 lines, byte-pinned via H; layer 2)
+       │   1. recompute SHA-256 of self -- abort if != H
+       │   2. `git fetch` -- abort if upstream changed .mcp-start.js
+       │   3. `git merge --ff-only` to pull raw/, wiki/ from upstream
+       │   4. spawn the actual MCP server via `npx`
+       ▼
+  obsidian-mcp-pro
+       │   exposes (per-vault namespaced):
+       │     mcp__my-wiki__search_notes
+       │     mcp__my-wiki__get_note
+       │     mcp__my-wiki__get_backlinks
+       │     mcp__my-wiki__get_tags
+       ▼
+  Claude Code  -- uses those tools to answer queries about your notes
+```
+
 ### Two-layer protection
 
 **Layer 1 — TOFU at registration.** Before registering, vaultkit shows the SHA-256 of `.mcp-start.js` and asks for explicit confirmation:

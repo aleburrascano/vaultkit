@@ -29,6 +29,7 @@ All notable changes to vaultkit are documented here. Format follows [Keep a Chan
 ### Docs (continued)
 - **README now displays npm version, CI status, license, and Node-version badges** at the top. A fresh user landing on the README previously had no quick visual signal that the package was alive, maintained, or tested. Standard shields.io badges via the existing scoped-npm-package metadata and the `ci.yml` workflow.
 - **README adds an FAQ section** between Platform support and Troubleshooting. Eight common questions a fresh user actually has but had to infer from prose elsewhere -- can I use this without GitHub (no), does it cost money (no, except auth-gated Pages requires Pro+), where does my data go, can I use the vault with non-Claude-Code MCP clients (yes, manually -- vaultkit only registers with Claude Code), what's the difference between disconnect and destroy, can I have many vaults at once (yes, namespaced), what's `_vault.json` (Quartz config), where do vaults live on disk (`~/vaults/<name>` by default).
+- **README adds an end-to-end trust-chain diagram** in Security & Trust. ASCII flow showing how `~/.claude.json`'s pinned SHA-256 hands off to the launcher, what the launcher actually does on session start (self-check / git fetch / fast-forward / npx-spawn), and how `obsidian-mcp-pro` exposes the per-vault namespaced MCP tools to Claude Code. Closes the gap where a tool wiring together five systems (local FS, GitHub repo, gh CLI, Claude Code MCP registry, obsidian-mcp-pro) was described in prose only.
 
 ## [2.5.0] - 2026-05-01
 
