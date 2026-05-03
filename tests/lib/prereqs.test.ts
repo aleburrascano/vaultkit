@@ -262,6 +262,32 @@ describe('ensureGitConfig', () => {
     });
   });
 
+  // Item 5d: empty-string opt passes through verbatim (nullish-coalesce
+  // short-circuits only on null/undefined, NOT on ''). Pin this current
+  // behavior — `git config --global user.name ""` is what gets written.
+  // A future "treat empty string as missing" change is a UX improvement
+  // but a behavior change that this test will surface in the diff.
+  it('writes an empty user.name when nameOpt is the empty string (latent UX issue)', async () => {
+    vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
+      if (args?.[0] === 'config' && args?.[1] === 'user.name') {
+        return { exitCode: 0, stdout: '', stderr: '' }; // not set yet
+      }
+      if (args?.[0] === 'config' && args?.[1] === 'user.email') {
+        return { exitCode: 0, stdout: 'already@set.com', stderr: '' };
+      }
+      return { exitCode: 0, stdout: '', stderr: '' };
+    }) as never);
+
+    await ensureGitConfig({ nameOpt: '' });
+
+    // input() was NOT called — the empty string short-circuited the prompt.
+    expect(vi.mocked(input)).not.toHaveBeenCalled();
+    const writes = vi.mocked(execa).mock.calls
+      .map(c => c[1] as readonly string[] | undefined)
+      .filter((a): a is readonly string[] => Array.isArray(a) && a[0] === 'config' && a[1] === '--global');
+    expect(writes).toEqual([['config', '--global', 'user.name', '']]);
+  });
+
   // Item 5c: both fields already set in git config → no inquirer, no writes.
   it('is a no-op when git config already has both name and email', async () => {
     vi.mocked(execa).mockImplementation((async (_cmd: string, args?: readonly string[]) => {
@@ -285,6 +311,18 @@ describe('ensureGitConfig', () => {
 });
 
 describe('ensureGh', () => {
+  // Item 6a: gh already on PATH → fast-path return, NO install attempt.
+  // A regression that always invokes installGhForPlatform (e.g. running
+  // winget on every init) would only show as a slowdown — pin it.
+  it('returns the gh path immediately when findTool succeeds on the first call', async () => {
+    vi.mocked(findTool).mockResolvedValueOnce('/usr/bin/gh');
+
+    const result = await ensureGh({ log: arrayLogger([]), skipInstallCheck: false });
+    expect(result).toBe('/usr/bin/gh');
+    expect(vi.mocked(installGhForPlatform)).not.toHaveBeenCalled();
+    expect(vi.mocked(findTool)).toHaveBeenCalledTimes(1);
+  });
+
   // Item 6: install-then-still-missing → throws VaultkitError('TOOL_MISSING').
   // Realistic on Windows when the new winget-installed gh isn't yet on PATH.
   it("throws TOOL_MISSING when install succeeds but findTool still can't locate gh", async () => {
@@ -365,6 +403,20 @@ describe('checkNode', () => {
     try {
       const result = checkNode();
       expect(result.ok).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('pins the success message format ("node: v<version>")', () => {
+    // checkNode at prereqs.ts:34 returns `node: v${version}`. A copy
+    // change (e.g. dropping the leading `v` or adding a suffix) would
+    // pass every existing test that only asserts ok === true. The
+    // failure-path message is already pinned by regex; pin success too.
+    const restore = stubNodeVersion('22.5.0');
+    try {
+      const result = checkNode();
+      expect(result.message).toBe('node: v22.5.0');
     } finally {
       restore();
     }
