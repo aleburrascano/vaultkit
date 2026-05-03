@@ -106,6 +106,31 @@ describe('detectGithubSlug', () => {
     // the prefix-match still produces a valid slug. Pin this behavior.
     expect(detectGithubSlug('https://github.com/owner/re po')).toBe('owner/re');
   });
+
+  it('passes shell-meta characters through verbatim (relies on execa argv form for safety)', () => {
+    // The repo class [^/\s.#?]+ excludes /, whitespace, ., #, ? — but does
+    // NOT exclude ', ", ;, &, $, `. A URL with shell-meta in the repo name
+    // produces a slug containing those chars verbatim, which then becomes
+    // the path segment in `gh api repos/<slug>/commits` (refresh.ts:139).
+    // execa's array form is shell-safe (no /bin/sh), but pin this so a
+    // regression to `execa.command()` (string form) breaks loudly.
+    // Repo capture continues until /, whitespace, or one of . # ? — so the
+    // shell-meta chars survive into the slug. Pin the actual values:
+    expect(detectGithubSlug("https://github.com/owner/repo'; ls")).toBe("owner/repo';");
+    expect(detectGithubSlug('https://github.com/owner/repo$VAR')).toBe('owner/repo$VAR');
+    expect(detectGithubSlug('https://github.com/owner/repo;rm')).toBe('owner/repo;rm');
+  });
+
+  it('preserves embedded basic-auth credentials in the matched slug-host substring (latent leak risk)', () => {
+    // A URL with `user:pass@github.com/owner/repo` matches because the regex
+    // doesn't anchor on host. The slug returned is just `owner/repo`, but
+    // the credential-bearing URL string is what gets written into the
+    // freshness report (refresh.ts:191 logs `Source URL: ${g.entry.url}`).
+    // This pins the slug-extraction behavior and flags the credential leak
+    // as a known property of the entry.url surface — addressing the leak
+    // requires sanitizing entry.url at format-report time, not here.
+    expect(detectGithubSlug('https://user:pass@github.com/owner/repo')).toBe('owner/repo');
+  });
 });
 
 describe('loadSources', () => {
@@ -338,5 +363,32 @@ describe('run --vault-dir validation', () => {
     const result = await run(undefined, { vaultDir: tmp, log: silent });
     expect(result.sourceCount).toBe(0);
     expect(result.reportPath).toBeNull();
+  });
+
+  it('rejected --vault-dir does NOT create a wiki/_freshness directory inside the target', async () => {
+    // The previous test asserts the throw on a non-vault dir. This pins the
+    // accompanying invariant: NO filesystem side effect happens before the
+    // rejection. Without this, a regression that runs `mkdirSync(<bad>/wiki/_freshness)`
+    // before validating would let `vaultkit refresh --vault-dir /etc` create
+    // /etc/wiki/_freshness even when the run() call ultimately throws.
+    const { existsSync } = await import('node:fs');
+    const { run } = await import('../../src/commands/refresh.js');
+    const { silent } = await import('../helpers/logger.js');
+    await expect(run(undefined, { vaultDir: tmp, log: silent })).rejects.toThrow();
+    expect(existsSync(join(tmp, 'wiki', '_freshness'))).toBe(false);
+    expect(existsSync(join(tmp, 'wiki'))).toBe(false);
+  });
+
+  it('rejects literal `~/...` paths (resolve() does NOT expand the tilde)', async () => {
+    // A user passing `--vault-dir ~/Documents/MyVault` expects shell expansion,
+    // but the shell may not have expanded if the arg was quoted, or the call
+    // came from a config file. resolve() treats `~` as a literal path segment
+    // → NOT_VAULT_LIKE. Pin this so refresh fails loud, not silently walks
+    // a directory named literally `~` in cwd.
+    const { run } = await import('../../src/commands/refresh.js');
+    const { silent } = await import('../helpers/logger.js');
+    await expect(
+      run(undefined, { vaultDir: '~/non-existent-vault-' + Date.now(), log: silent }),
+    ).rejects.toThrow(/NOT_VAULT_LIKE|not a vault/);
   });
 });
