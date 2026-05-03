@@ -192,6 +192,49 @@ describe('findTool', () => {
     const result = await findTool('definitely-not-a-real-tool-vaultkit-xyz-99');
     expect(result).toBeNull();
   }, 15000);
+
+  it('falls through PROGRAMFILES to LOCALAPPDATA WinGet Links candidate (Windows)', async () => {
+    if (process.platform !== 'win32') return;
+    // PROGRAMFILES set to a path with NO gh.exe → first candidate misses.
+    // LOCALAPPDATA/Microsoft/WinGet/Links/gh.exe exists → third candidate hits.
+    process.env.PROGRAMFILES = join(tmp, 'fake-programfiles');
+    const linksDir = join(tmp, 'Microsoft', 'WinGet', 'Links');
+    mkdirSync(linksDir, { recursive: true });
+    writeFileSync(join(linksDir, 'gh.exe'), '');
+    process.env.LOCALAPPDATA = tmp;
+
+    const result = await findTool('gh');
+    expect(result).toBe(join(linksDir, 'gh.exe'));
+  });
+
+  it('falls through to probeWinGetGhPath when no candidate dir contains gh.exe (Windows)', async () => {
+    if (process.platform !== 'win32') return;
+    // PROGRAMFILES + the hardcoded C:\Program Files path + LOCALAPPDATA Links
+    // all miss. The probe walks LOCALAPPDATA/Microsoft/WinGet/Packages/GitHub.cli_*/tools/gh.exe
+    // and returns the first match.
+    process.env.PROGRAMFILES = join(tmp, 'fake-programfiles');
+    const wingetPkg = join(tmp, 'Microsoft', 'WinGet', 'Packages',
+      'GitHub.cli_Microsoft.Winget.Source_8wekyb3d8bbwe', 'tools');
+    mkdirSync(wingetPkg, { recursive: true });
+    writeFileSync(join(wingetPkg, 'gh.exe'), '');
+    // LOCALAPPDATA points at tmp, but /Microsoft/WinGet/Links/gh.exe doesn't
+    // exist (only the Packages subtree does), so probeWinGetGhPath runs.
+    process.env.LOCALAPPDATA = tmp;
+
+    const result = await findTool('gh');
+    expect(result).toBe(join(wingetPkg, 'gh.exe'));
+  });
+
+  it('on non-Windows, falls through to findOnPath which resolves a real binary', async () => {
+    if (process.platform === 'win32') return;
+    // Skip the Windows shortcut paths entirely. `node` is guaranteed to
+    // exist on any Node test runner; `which node` returns its path.
+    // Pins the POSIX fall-through so a regression that adds a hardcoded
+    // POSIX shortcut path (or breaks the fall-through) surfaces.
+    const result = await findTool('node');
+    expect(result).not.toBeNull();
+    expect(result).toContain('node');
+  });
 });
 
 describe('npmGlobalBin', () => {
