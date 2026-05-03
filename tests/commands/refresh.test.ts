@@ -43,6 +43,34 @@ describe('parseFrontmatter', () => {
     expect(out.fm.source).toBe('https://x.com');
     expect(out.body).toBe('body');
   });
+
+  it('does NOT strip a UTF-8 BOM at the start of the file (regex is anchored at ^---)', () => {
+    // Files saved by Notepad / PowerShell on Windows commonly include a BOM.
+    // The current regex `^---\r?\n([\s\S]*?)\r?\n---\r?\n/` is anchored at
+    // `^---` and does NOT match a leading BOM. Pin this so the unanchored-
+    // BOM behavior is a deliberate choice — if BOM tolerance is added, this
+    // test surfaces the change in the diff.
+    const out = parseFrontmatter('﻿---\nsource: https://x.com\n---\nbody');
+    expect(out.fm).toEqual({});
+    expect(out.body).toBe('﻿---\nsource: https://x.com\n---\nbody');
+  });
+
+  it('returns empty fm when frontmatter has no closing newline after ---', () => {
+    // Common with ad-hoc clipboard-pasted clips that lack a final newline.
+    // The regex requires `\r?\n` after the closing `---`, so this case
+    // does NOT match → fm={} body=full. Pin the current behavior.
+    const out = parseFrontmatter('---\nsource: https://x.com\n---');
+    expect(out.fm).toEqual({});
+    expect(out.body).toBe('---\nsource: https://x.com\n---');
+  });
+
+  it('returns empty fm when frontmatter delimiters touch without a body separator', () => {
+    // `---\n---\n` lacks the inner `\n` separator the regex needs (the
+    // pattern `\n---\n` requires content before it). Pin no-match.
+    const out = parseFrontmatter('---\n---\nbody');
+    expect(out.fm).toEqual({});
+    expect(out.body).toBe('---\n---\nbody');
+  });
 });
 
 describe('detectGithubSlug', () => {
@@ -319,6 +347,32 @@ describe('formatReport', () => {
     expect(findingCount).toBe(0);
   });
 
+  it('treats similarity exactly at the threshold (0.95) as NOT drifted (strict-less-than)', () => {
+    // The check at refresh.ts:175 is `c.similarity < SIMILARITY_THRESHOLD`,
+    // strict less-than. A future flip to `<=` would silently start
+    // reporting sources at exactly 0.95 as drifted. Pin the boundary.
+    const { findingCount } = formatReport([
+      {
+        kind: 'compared',
+        entry: { filePath: 'raw/y.md', url: 'https://example.com', sourceDate: null, body: '' },
+        similarity: SIMILARITY_THRESHOLD,
+      },
+    ], today);
+    expect(findingCount).toBe(0);
+  });
+
+  it('treats similarity exactly 1.0 as NOT drifted', () => {
+    // Identical content. Must not be reported.
+    const { findingCount } = formatReport([
+      {
+        kind: 'compared',
+        entry: { filePath: 'raw/y.md', url: 'https://example.com', sourceDate: null, body: '' },
+        similarity: 1.0,
+      },
+    ], today);
+    expect(findingCount).toBe(0);
+  });
+
   it('routes unfetchables to manual-review', () => {
     const { report, findingCount } = formatReport([
       {
@@ -373,6 +427,55 @@ describe('formatReport', () => {
     ], today);
     expect(report).toContain('"Wiki Style & Refresh Policy"');
     expect(report).toContain('WebFetch');
+  });
+
+  it('OMITS the patch-flow footer on the no-findings path (no PR noise)', () => {
+    // The early return at refresh.ts:182-184 emits a minimal report with
+    // ONLY the header + "no upstream changes" line. The patch-flow footer
+    // (Wiki Style policy + WebFetch hint) MUST NOT appear, otherwise
+    // quiet-week PRs would carry noise that humans treat as actionable.
+    const { report } = formatReport([], today);
+    expect(report).not.toContain('Wiki Style & Refresh Policy');
+    expect(report).not.toContain('WebFetch');
+  });
+
+  it('emits all four sections in order when every CheckResult kind is present', () => {
+    // No existing test exercises >1 section type per call. A future
+    // refactor that re-orders sections (e.g. moves no-URL above git)
+    // would pass every per-section test today. Pin canonical order:
+    // git → compared → manual-review (unfetchable + errored-git) → no-url.
+    const { report, findingCount } = formatReport([
+      {
+        kind: 'git',
+        entry: { filePath: 'raw/g.md', url: 'https://github.com/o/r', sourceDate: null, body: '' },
+        slug: 'o/r',
+        newCommits: 1,
+        recentSubjects: ['Add feature'],
+      },
+      {
+        kind: 'compared',
+        entry: { filePath: 'raw/c.md', url: 'https://example.com', sourceDate: null, body: '' },
+        similarity: 0.5,
+      },
+      {
+        kind: 'unfetchable',
+        entry: { filePath: 'raw/u.md', url: 'https://paywall.example.com', sourceDate: null, body: '' },
+        reason: 'HTTP 402',
+      },
+      { kind: 'no-url', entry: { filePath: 'raw/n.md', url: '', sourceDate: null, body: '' } },
+    ], today);
+
+    expect(findingCount).toBe(4);
+
+    const idxGit = report.indexOf('## Sources auto-checked (git)');
+    const idxCompared = report.indexOf('## Sources auto-checked (text-only compare)');
+    const idxManual = report.indexOf("## Sources couldn't auto-check");
+    const idxNoUrl = report.indexOf('## Sources without a URL');
+
+    expect(idxGit).toBeGreaterThan(-1);
+    expect(idxCompared).toBeGreaterThan(idxGit);
+    expect(idxManual).toBeGreaterThan(idxCompared);
+    expect(idxNoUrl).toBeGreaterThan(idxManual);
   });
 });
 
