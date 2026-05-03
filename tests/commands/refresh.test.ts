@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -171,6 +171,49 @@ describe('loadSources', () => {
     writeFileSync(join(tmp, 'raw', 'a', 'b', 'deep.md'), '---\nsource: x\n---\nbody');
     const sources = loadSources(tmp);
     expect(sources[0]?.filePath).toBe('raw/a/b/deep.md');
+  });
+});
+
+describe('loadSources — symlink safety', () => {
+  it('does NOT follow symlinks pointing OUT of the vault (relies on Dirent.isFile() being lstat-based)', () => {
+    // Defensive pin: walkMarkdown branches on `entry.isDirectory()` and
+    // `entry.isFile()`. Both come from readdirSync's Dirent which is
+    // populated via lstat (not stat), so a symlink is neither — meaning
+    // the loop SKIPS symlinks regardless of what they point at. A future
+    // refactor that switches to readdirSync({recursive: true}) or that
+    // calls statSync on entries would silently start following links,
+    // and a malicious vault with `raw/leak → /etc` could get the contents
+    // of system files into the freshness report.
+    const escapeDir = mkdtempSync(join(tmpdir(), 'vk-refresh-escape-'));
+    writeFileSync(join(escapeDir, 'leaked.md'),
+      '---\nsource: https://example.com\n---\nleaked content from outside vault');
+
+    mkdirSync(join(tmp, 'raw'), { recursive: true });
+    // Real-world content lives alongside the symlink — should still load.
+    writeFileSync(join(tmp, 'raw', 'real.md'),
+      '---\nsource: https://github.com/owner/repo\n---\nreal vault content');
+
+    try {
+      // junction works for directories on Windows without elevated perms;
+      // 'dir' tells Node to use SYMLINK_TYPE_DIR on Windows / a directory
+      // symlink on POSIX. EPERM happens on Windows without Developer Mode.
+      symlinkSync(escapeDir, join(tmp, 'raw', 'escape'), 'junction');
+    } catch (err) {
+      if ((err as { code?: string }).code === 'EPERM' || (err as { code?: string }).code === 'EEXIST') {
+        rmSync(escapeDir, { recursive: true, force: true });
+        return; // skip the test on systems where we can't create the link
+      }
+      rmSync(escapeDir, { recursive: true, force: true });
+      throw err;
+    }
+
+    const sources = loadSources(tmp);
+    rmSync(escapeDir, { recursive: true, force: true });
+
+    // The symlink's target file MUST NOT appear among loaded sources.
+    expect(sources.find(s => s.body.includes('leaked content from outside vault'))).toBeUndefined();
+    // The legitimate raw/real.md MUST still be loaded.
+    expect(sources.find(s => s.body.includes('real vault content'))).toBeDefined();
   });
 });
 
