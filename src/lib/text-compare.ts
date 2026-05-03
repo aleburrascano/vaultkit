@@ -21,6 +21,54 @@ const MIN_ARTICLE_LENGTH = 100;
 const FETCH_TIMEOUT_MS = 15_000;
 
 /**
+ * Validate a URL against the SSRF allowlist before fetch. Returns null when
+ * safe; returns a human-readable rejection reason otherwise. Rejects:
+ *   - non-http(s) protocols (file://, data:, javascript:, ftp://, etc.)
+ *   - localhost / 0.0.0.0 hostnames
+ *   - IPv4 loopback (127.0.0.0/8)
+ *   - IPv4 link-local (169.254.0.0/16) — covers AWS IMDS at 169.254.169.254
+ *   - IPv4 RFC 1918 private ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+ *   - IPv6 loopback (::1), link-local (fe80::/10), ULA (fc00::/7)
+ *
+ * Does NOT defend against DNS rebinding (a public hostname that resolves to
+ * an internal IP); that requires resolving DNS before the fetch and rejecting
+ * the resolved address, which is out of scope. The allowlist covers the
+ * static-URL surface a malicious vault frontmatter could exploit.
+ */
+export function _rejectInternalUrl(url: string): string | null {
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return 'invalid URL'; }
+
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return `non-http(s) protocol: ${parsed.protocol}`;
+  }
+
+  // URL.hostname returns IPv6 addresses without brackets. Normalize anyway.
+  const host = parsed.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+
+  if (host === 'localhost' || host === '0.0.0.0') return `internal hostname: ${host}`;
+
+  // IPv4 numeric ranges
+  const ipv4 = host.split('.');
+  if (ipv4.length === 4 && ipv4.every(p => /^\d{1,3}$/.test(p))) {
+    const a = parseInt(ipv4[0] ?? '', 10);
+    const b = parseInt(ipv4[1] ?? '', 10);
+    if (a === 127) return `loopback IPv4: ${host}`;
+    if (a === 10) return `private IPv4: ${host}`;
+    if (a === 169 && b === 254) return `link-local IPv4: ${host}`;
+    if (a === 172 && b >= 16 && b <= 31) return `private IPv4: ${host}`;
+    if (a === 192 && b === 168) return `private IPv4: ${host}`;
+  }
+
+  // IPv6 ranges (host already lowercased and bracket-stripped)
+  if (host === '::1' || host === '::') return `IPv6 loopback: ${host}`;
+  if (host.startsWith('fe80:')) return `IPv6 link-local: ${host}`;
+  if (/^fc[0-9a-f]{2}:/.test(host) || /^fd[0-9a-f]{2}:/.test(host)) return `IPv6 ULA: ${host}`;
+
+  return null;
+}
+
+/**
  * Strip YAML frontmatter, markdown formatting, and whitespace
  * collapse to get a plain-text projection of a markdown file
  * suitable for comparison against extracted article text.
@@ -72,6 +120,13 @@ export async function compareSource(
   url: string,
   localMarkdownText: string,
 ): Promise<CompareResult> {
+  // SSRF allowlist: refuse before fetch so a malicious vault's frontmatter
+  // URL cannot reach internal services (AWS IMDS, localhost, RFC 1918).
+  const rejection = _rejectInternalUrl(url);
+  if (rejection) {
+    return { kind: 'unfetchable', reason: rejection };
+  }
+
   let response: Response;
   try {
     const controller = new AbortController();
