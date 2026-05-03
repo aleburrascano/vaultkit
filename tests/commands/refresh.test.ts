@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -433,5 +433,56 @@ describe('run --vault-dir validation', () => {
     await expect(
       run(undefined, { vaultDir: '~/non-existent-vault-' + Date.now(), log: silent }),
     ).rejects.toThrow(/NOT_VAULT_LIKE|not a vault/);
+  });
+});
+
+// ── LIVE: refresh writes a freshness report (local-only via makeLocalVault) ──
+//
+// Plain `describe` (not liveDescribe) — this block does NOT create a GitHub
+// repo, only makes a single read-only `gh api repos/octocat/Hello-World/commits`
+// call. Both Ubuntu and Windows CI legs run it. Total cost: zero vk-live-*
+// repo creates, one gh-API read per CI run (negligible against 5000/hr/PAT).
+
+describe('live: refresh writes freshness report (local-only via makeLocalVault)', { timeout: 30_000 }, () => {
+  const liveName = `vk-live-refresh-${Date.now()}`;
+  let liveVault: { vaultDir: string; cleanup: () => Promise<void> } | null = null;
+
+  beforeAll(async () => {
+    const { makeLocalVault } = await import('../helpers/local-vault.js');
+    liveVault = await makeLocalVault({ name: liveName, withRemote: false });
+    // Pre-populate raw/foo.md citing a stable public repo. octocat/Hello-World
+    // has had commits historically (used in GitHub tutorials), so the
+    // `gh api .../commits` call returns a non-empty array → findingCount > 0
+    // → freshness report MUST be written.
+    writeFileSync(
+      join(liveVault.vaultDir, 'raw', 'tutorial.md'),
+      '---\nsource: https://github.com/octocat/Hello-World\n---\nbody text',
+    );
+  });
+
+  afterAll(async () => {
+    if (liveVault) await liveVault.cleanup().catch(() => {});
+  });
+
+  it('writes wiki/_freshness/<today>.md when a real public repo has commits', async () => {
+    const { run } = await import('../../src/commands/refresh.js');
+    const { silent: liveSilent } = await import('../helpers/logger.js');
+
+    const result = await run(liveName, { log: liveSilent });
+
+    expect(result.sourceCount).toBe(1);
+    expect(result.findingCount).toBeGreaterThan(0);
+    expect(result.reportPath).not.toBeNull();
+
+    const today = new Date().toISOString().slice(0, 10);
+    const expectedPath = join(liveVault!.vaultDir, 'wiki', '_freshness', `${today}.md`);
+    expect(result.reportPath).toBe(expectedPath);
+    expect(existsSync(expectedPath)).toBe(true);
+
+    const report = readFileSync(expectedPath, 'utf8');
+    expect(report).toContain(`# Freshness report — ${today}`);
+    expect(report).toContain('octocat/Hello-World');
+    // Patch-flow footer points at the wiki style section in CLAUDE.md
+    expect(report).toContain('Wiki Style & Refresh Policy');
   });
 });
