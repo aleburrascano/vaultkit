@@ -84,8 +84,12 @@ describe('isWindows', () => {
 
 describe('claudeJsonPath — env var edge cases', () => {
   let origEnv: NodeJS.ProcessEnv;
-  beforeEach(() => { origEnv = { ...process.env }; });
-  afterEach(() => { process.env = origEnv; });
+  let origPlatform: NodeJS.Platform;
+  beforeEach(() => { origEnv = { ...process.env }; origPlatform = process.platform; });
+  afterEach(() => {
+    process.env = origEnv;
+    Object.defineProperty(process, 'platform', { value: origPlatform, writable: true });
+  });
 
   it('returns a path containing .claude.json even when HOME is unset', async () => {
     delete process.env.HOME;
@@ -94,12 +98,33 @@ describe('claudeJsonPath — env var edge cases', () => {
     const p = claudeJsonPath();
     expect(p).toMatch(/\.claude\.json$/);
   });
+
+  it('returns a RELATIVE `.claude.json` when HOME and USERPROFILE are both unset on Linux (latent bug)', async () => {
+    // The `?? ''` fallback at platform.ts:71 + path.join('', '.claude.json')
+    // produces the relative path '.claude.json'. In practice HOME is always
+    // set; pinning this so a future hardening (refuse-on-unset, default
+    // to /tmp, etc.) is a deliberate, diff-visible change. Flagged in
+    // the test-debt audit as a "latent bug" — registry would be written
+    // to cwd instead of $HOME.
+    Object.defineProperty(process, 'platform', { value: 'linux', writable: true });
+    delete process.env.HOME;
+    delete process.env.USERPROFILE;
+    const { claudeJsonPath } = await import('../../src/lib/platform.js?bust=' + Date.now());
+    const { isAbsolute } = await import('node:path');
+    const p = claudeJsonPath();
+    expect(p).toBe('.claude.json');
+    expect(isAbsolute(p)).toBe(false);
+  });
 });
 
 describe('vaultsRoot — env var edge cases', () => {
   let origEnv: NodeJS.ProcessEnv;
-  beforeEach(() => { origEnv = { ...process.env }; });
-  afterEach(() => { process.env = origEnv; });
+  let origPlatform: NodeJS.Platform;
+  beforeEach(() => { origEnv = { ...process.env }; origPlatform = process.platform; });
+  afterEach(() => {
+    process.env = origEnv;
+    Object.defineProperty(process, 'platform', { value: origPlatform, writable: true });
+  });
 
   it('uses HOME fallback when VAULTKIT_HOME is empty string', async () => {
     process.env.VAULTKIT_HOME = '';
@@ -107,6 +132,26 @@ describe('vaultsRoot — env var edge cases', () => {
     const { vaultsRoot } = await import('../../src/lib/platform.js?bust=' + Date.now());
     // Empty string is falsy — should fall back to HOME/vaults
     expect(vaultsRoot()).toBe(join(home, 'vaults'));
+  });
+
+  it('on linux with explicit HOME, returns HOME/vaults (platform-forced pin)', async () => {
+    // The earlier test reads whatever HOME / USERPROFILE the host has —
+    // this pin forces both platform and HOME so the test is deterministic
+    // regardless of CI host. A future flip of the isWindows() branch order
+    // in vaultsRoot would surface here.
+    Object.defineProperty(process, 'platform', { value: 'linux', writable: true });
+    process.env.HOME = '/home/testuser';
+    delete process.env.VAULTKIT_HOME;
+    const { vaultsRoot } = await import('../../src/lib/platform.js?bust=' + Date.now());
+    expect(vaultsRoot()).toBe(join('/home/testuser', 'vaults'));
+  });
+
+  it('on win32 with explicit USERPROFILE, returns USERPROFILE\\vaults', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32', writable: true });
+    process.env.USERPROFILE = 'C:\\Users\\TestUser';
+    delete process.env.VAULTKIT_HOME;
+    const { vaultsRoot } = await import('../../src/lib/platform.js?bust=' + Date.now());
+    expect(vaultsRoot()).toBe(join('C:\\Users\\TestUser', 'vaults'));
   });
 });
 
