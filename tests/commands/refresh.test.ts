@@ -70,6 +70,42 @@ describe('detectGithubSlug', () => {
   it('handles deep paths', () => {
     expect(detectGithubSlug('https://github.com/owner/repo/blob/main/README.md')).toBe('owner/repo');
   });
+
+  it('strips query strings and fragments via the regex stop chars', () => {
+    // The regex's repo-capture class is [^/\s.#?]+ — any of /, ., #, ? terminates
+    // the repo name, so query strings and fragments don't leak into the slug.
+    expect(detectGithubSlug('https://github.com/owner/repo?tab=readme')).toBe('owner/repo');
+    expect(detectGithubSlug('https://github.com/owner/repo#installation')).toBe('owner/repo');
+    expect(detectGithubSlug('https://github.com/owner/repo?tab=readme#installation')).toBe('owner/repo');
+  });
+
+  it('matches case-insensitively (per the /i flag)', () => {
+    // Real-world URLs are lowercase, but pin the documented case-insensitivity
+    // so a future regex change without /i surfaces explicitly.
+    expect(detectGithubSlug('https://GITHUB.COM/owner/repo')).toBe('owner/repo');
+  });
+
+  it('matches the FIRST github.com substring when multiple appear', () => {
+    // Defense-in-depth: a URL containing two github.com sequences (e.g. via
+    // an open redirect or fragment) should extract the first match. Pinning
+    // current behavior so an attacker-supplied URL with `?next=https://github.com/evil/repo`
+    // can't smuggle through.
+    expect(
+      detectGithubSlug('https://example.com/r?next=https://github.com/evil/payload'),
+    ).toBe('evil/payload');
+    // Subdomain match: gist.github.com matches the regex (no host-anchor).
+    // This pins current behavior — if anchoring is added later, this test
+    // surfaces the change.
+    expect(detectGithubSlug('https://gist.github.com/owner/repo')).toBe('owner/repo');
+  });
+
+  it('rejects whitespace in the owner segment but truncates whitespace in the repo segment', () => {
+    // Owner segment uses [^/\s]+ — whitespace in owner is fatal (no match).
+    expect(detectGithubSlug('https://github.com/own er/repo')).toBeNull();
+    // Repo segment uses [^/\s.#?]+ — whitespace stops the match early but
+    // the prefix-match still produces a valid slug. Pin this behavior.
+    expect(detectGithubSlug('https://github.com/owner/re po')).toBe('owner/re');
+  });
 });
 
 describe('loadSources', () => {

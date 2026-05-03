@@ -80,6 +80,33 @@ describe('_normalizeInput', () => {
     expect(() => _normalizeInput('not-a-repo')).toThrow(/unrecognized/i);
     expect(() => _normalizeInput('http://example.com/repo')).toThrow(/unrecognized/i);
   });
+
+  it('accepts https URL with a trailing slash', () => {
+    expect(_normalizeInput('https://github.com/owner/MyVault/')).toEqual({
+      repo: 'owner/MyVault', name: 'MyVault',
+    });
+  });
+
+  it('accepts https URL with a deep path after the repo', () => {
+    // Web browser URLs like .../blob/main/README.md should still extract the slug.
+    expect(_normalizeInput('https://github.com/owner/MyVault/blob/main/README.md')).toEqual({
+      repo: 'owner/MyVault', name: 'MyVault',
+    });
+  });
+
+  it('accepts repo names with hyphens via shorthand', () => {
+    expect(_normalizeInput('owner/my-vault-name')).toEqual({
+      repo: 'owner/my-vault-name', name: 'my-vault-name',
+    });
+  });
+
+  it('throws for empty input', () => {
+    expect(() => _normalizeInput('')).toThrow(/unrecognized/i);
+  });
+
+  it('throws for owner-only input (missing repo)', () => {
+    expect(() => _normalizeInput('owner')).toThrow(/unrecognized/i);
+  });
 });
 
 // ── TR-1: clone failure — nothing left on disk ─────────────────────────────────
@@ -274,6 +301,47 @@ describe('TR-7: runMcpAdd hash value', () => {
     const { sha256 } = await import('../../src/lib/vault.js');
     const actualHash = await sha256(join(vaultDir, '.mcp-start.js'));
     expect(passedHash).toBe(actualHash);
+  });
+});
+
+// ── TR-8: pre-clone collision — name already in registry ─────────────────────
+
+describe('TR-8: pre-clone collision (name in registry)', () => {
+  it('throws ALREADY_REGISTERED before any clone attempt', async () => {
+    const cfgPath = join(tmp, '.claude.json');
+    // Pre-register a vault under the name we'll try to connect to.
+    writeFileSync(cfgPath, JSON.stringify({
+      mcpServers: {
+        AlreadyHere: {
+          command: 'node',
+          args: [join(tmp, 'AlreadyHere', '.mcp-start.js'), '--expected-sha256=' + 'a'.repeat(64)],
+        },
+      },
+    }), 'utf8');
+
+    const { run } = await import('../../src/commands/connect.js');
+    await expect(run('owner/AlreadyHere', { cfgPath, log: silent }))
+      .rejects.toThrow(/ALREADY_REGISTERED|already registered/i);
+
+    // clone was NEVER called — collision detected before
+    expect(vi.mocked(clone)).not.toHaveBeenCalled();
+  });
+});
+
+// ── TR-9: pre-clone collision — vault dir exists on disk but not in registry ──
+
+describe('TR-9: pre-clone collision (dir on disk)', () => {
+  it('throws ALREADY_REGISTERED when target dir exists but is not registered', async () => {
+    const cfgPath = join(tmp, '.claude.json');
+    writeFileSync(cfgPath, JSON.stringify({ mcpServers: {} }), 'utf8');
+    // Pre-create the target directory (without registering the vault).
+    mkdirSync(join(tmp, 'OrphanDir'), { recursive: true });
+
+    const { run } = await import('../../src/commands/connect.js');
+    await expect(run('owner/OrphanDir', { cfgPath, log: silent }))
+      .rejects.toThrow(/already exists/i);
+
+    expect(vi.mocked(clone)).not.toHaveBeenCalled();
   });
 });
 
