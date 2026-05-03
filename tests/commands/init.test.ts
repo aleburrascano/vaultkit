@@ -665,6 +665,76 @@ describe('I-16: --publish=auth-gated (pro plan)', () => {
   });
 });
 
+// ── I-15b/I-16b: visibility argv opposite-token-absent invariants ────────────
+
+describe('I-15b/I-16b: createRepo argv carries exactly ONE private=<bool> token', () => {
+  // I-15 / I-16 already assert the EXPECTED token is present (`private=false`
+  // for public, `private=true` for auth-gated). They do NOT assert the
+  // opposite token is absent. A buggy serialization that emits both tokens
+  // (e.g. `gh api ... -f private=false -f private=true`) would let GitHub
+  // pick whichever it sees last — silently flipping the requested visibility.
+  it('public mode argv contains private=false and NOT private=true', async () => {
+    vi.mocked(select).mockResolvedValue('public');
+
+    const { run } = await import('../../src/commands/init.js');
+    await run('PubArgvVault', { cfgPath: join(tmp, '.claude.json'), log: silent }).catch(() => {});
+
+    const repoCreate = vi.mocked(execa).mock.calls.find(c => {
+      const args = c[1] as unknown;
+      if (!Array.isArray(args)) return false;
+      return args[0] === 'api' && args.some(a => String(a).includes('/user/repos'));
+    });
+    const argv = (repoCreate?.[1] as readonly unknown[])?.map(String) ?? [];
+    expect(argv).toContain('private=false');
+    expect(argv).not.toContain('private=true');
+  });
+
+  it('auth-gated mode argv contains private=true and NOT private=false', async () => {
+    vi.mocked(select).mockResolvedValue('auth-gated');
+
+    const { run } = await import('../../src/commands/init.js');
+    await run('GatedArgvVault', { cfgPath: join(tmp, '.claude.json'), log: silent }).catch(() => {});
+
+    const repoCreate = vi.mocked(execa).mock.calls.find(c => {
+      const args = c[1] as unknown;
+      if (!Array.isArray(args)) return false;
+      return args[0] === 'api' && args.some(a => String(a).includes('/user/repos'));
+    });
+    const argv = (repoCreate?.[1] as readonly unknown[])?.map(String) ?? [];
+    expect(argv).toContain('private=true');
+    expect(argv).not.toContain('private=false');
+  });
+
+  it('private mode argv contains private=true and NOT private=false (default)', async () => {
+    // The interactive default + the `vaultkit init --publish=private` path
+    // both land on this branch. private=true MUST be set; private=false
+    // must NOT appear (and the deploy.yml workflow MUST NOT be written).
+    vi.mocked(select).mockResolvedValue('private');
+
+    const { run } = await import('../../src/commands/init.js');
+    await run('PrivArgvVault', { cfgPath: join(tmp, '.claude.json'), log: silent }).catch(() => {});
+
+    const repoCreate = vi.mocked(execa).mock.calls.find(c => {
+      const args = c[1] as unknown;
+      if (!Array.isArray(args)) return false;
+      return args[0] === 'api' && args.some(a => String(a).includes('/user/repos'));
+    });
+    const argv = (repoCreate?.[1] as readonly unknown[])?.map(String) ?? [];
+    expect(argv).toContain('private=true');
+    expect(argv).not.toContain('private=false');
+
+    // Notes-only mode → no Pages POST and no deploy.yml on disk
+    const pagesPost = vi.mocked(execa).mock.calls.find(c => {
+      const args = c[1] as unknown;
+      if (!Array.isArray(args)) return false;
+      const flat = args.map(String).join(' ');
+      return flat.includes('/pages') && flat.includes('POST');
+    });
+    expect(pagesPost).toBeUndefined();
+    expect(existsSync(join(tmp, 'PrivArgvVault', '.github', 'workflows', 'deploy.yml'))).toBe(false);
+  });
+});
+
 // ── I-17: invalid --publish value rejected ────────────────────────────────────
 
 describe('I-17: invalid publish mode', () => {
